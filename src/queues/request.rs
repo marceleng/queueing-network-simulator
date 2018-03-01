@@ -20,4 +20,8 @@ impl Request {
         }
         ret
     }
+
+    pub fn get_content (&self) -> u64 {
+        self.content
+    }
 }

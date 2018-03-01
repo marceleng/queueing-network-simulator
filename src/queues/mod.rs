@@ -1,6 +1,7 @@
 pub mod request;
 pub mod mg1ps;
 pub mod poisson_generator;
+pub mod zipfgen;
 
 use self::request::Request;
 

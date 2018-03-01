@@ -2,6 +2,7 @@ pub mod request;
 pub mod mg1ps;
 pub mod poisson_generator;
 pub mod zipfgen;
+pub mod queueing_network;
 
 use self::request::Request;
 

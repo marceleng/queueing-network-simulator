@@ -42,6 +42,10 @@ impl<T> ZipfGenerator<T> where T: Sample<f64> {
         let ntime = time + self.iat_distribution[content-1].sample(&mut rand::thread_rng());
         self.next_arrivals.push(ntime, Request::new(content as u64));
     }
+
+    pub fn get_alpha (&self) -> f64 {
+        self.alpha
+    }
 }
 
 impl<T> Queue for ZipfGenerator<T> where T: Sample<f64> {

@@ -1,10 +1,13 @@
 static mut REQUEST_COUNTER: u64 = 0;
 
+type LogKey   = f64;
+type LogEntry = (usize, usize);
+
 #[derive(PartialEq,Clone,Debug)]
 pub struct Request {
     id: u64,
     content: u64,
-    log: Vec<(f64,String)>,
+    log: Vec<(LogKey, LogEntry)>,
 }
 
 impl Request {
@@ -23,5 +26,19 @@ impl Request {
 
     pub fn get_content (&self) -> u64 {
         self.content
+    }
+
+    pub fn get_id(&self) -> u64 {
+        self.id
+    }
+
+    pub fn add_log_entry(&mut self, key: LogKey, entry: LogEntry)
+    {
+        self.log.push((key, entry));
+    }
+
+    pub fn get_log(&self) -> Vec<(LogKey, LogEntry)>
+    {
+        self.log.clone()
     }
 }

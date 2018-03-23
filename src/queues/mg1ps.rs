@@ -31,17 +31,29 @@ impl<T> Queue for MG1PS<T> where T: Sample<f64> {
     }
 
     fn update_time (&mut self, time: f64) {
-        let coef = self.work_rate / (self.processes.len() as f64);
-        let work_update = (time - self.time) * coef;
-        self.processes.translate_keys(-work_update);
+        if self.processes.len() > 0 {
+            let coef = self.work_rate / (self.processes.len() as f64);
+            let work_update = (time - self.time) * coef;
+            self.processes.translate_keys(-work_update);
+        }
         self.time = time
     }
 
     fn read_next_exit(&self) -> Option<(f64, &Request)> {
-        self.processes.peek()
+        match self.processes.peek() {
+            None => None,
+            Some((w,r)) => {
+                Some((self.time + w*(self.processes.len() as f64)/self.work_rate, r))
+            }
+        }
     }
 
     fn pop_next_exit  (&mut self) -> Option<(f64,Request)> {
-        self.processes.pop()
+        match self.processes.pop() {
+            None => None,
+            Some((w,r)) => {
+                Some((self.time + w*(self.processes.len() as f64)/self.work_rate, r))
+            }
+        }
     }
 }

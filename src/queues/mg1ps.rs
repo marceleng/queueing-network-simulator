@@ -40,20 +40,10 @@ impl<T> Queue for MG1PS<T> where T: Sample<f64> {
     }
 
     fn read_next_exit(&self) -> Option<(f64, &Request)> {
-        match self.processes.peek() {
-            None => None,
-            Some((w,r)) => {
-                Some((self.time + w*(self.processes.len() as f64)/self.work_rate, r))
-            }
-        }
+        self.processes.peek().map(|(w,r)| (self.time + w*(self.processes.len() as f64)/self.work_rate, r))
     }
 
     fn pop_next_exit  (&mut self) -> Option<(f64,Request)> {
-        match self.processes.pop() {
-            None => None,
-            Some((w,r)) => {
-                Some((self.time + w*(self.processes.len() as f64)/self.work_rate, r))
-            }
-        }
+        self.processes.pop().map(|(w,r)| (self.time + w*(self.processes.len() as f64)/self.work_rate, r))
     }
 }

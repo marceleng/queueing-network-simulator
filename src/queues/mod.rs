@@ -3,6 +3,8 @@ pub mod mg1ps;
 pub mod poisson_generator;
 pub mod zipfgen;
 pub mod queueing_network;
+pub mod file_logger;
+pub mod passthrough;
 
 use self::request::Request;
 

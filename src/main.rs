@@ -9,54 +9,47 @@ pub mod llist;
 
 extern crate rand;
 
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use rand::distributions::Exp;
 
 use queues::mg1ps::MG1PS;
 use queues::zipfgen::ZipfGenerator;
 use queues::queueing_network::QNet;
+use queues::file_logger::FileLogger;
+
 use queues::request::Request;
+
 use caches::lru_cache::LruCache;
 use caches::Cache;
-use caches::lru_cache::Iter;
 
 fn main() {
-    let mut cache: LruCache<u64> = LruCache::new(5);
 
-    println!("{}",cache.contains(&3));
-    cache.update(5);
-    for iter in cache.iter() {
-        print!("{} ", iter)
+    let mut qn = QNet::new();
+    let gen_idx = qn.add_queue(Box::new(ZipfGenerator::new(1.0, 100000, |x| Exp::new(x*1.0))));
+    let comp_idx = qn.add_queue(Box::new(MG1PS::new(2.0, Exp::new(1.0))));
+    let log_idx = qn.add_queue(Box::new(FileLogger::new(1000, "test.csv")));
+
+    let cache = LruCache::new(1000);
+    let cache = Rc::new(RefCell::new(cache));
+    let cache_copy = cache.clone();
+
+    qn.add_transition(gen_idx, Box::new(move | r: &Request | {
+        if cache.borrow().contains (&r.get_content()) {
+            cache.borrow_mut().update(r.get_content());
+            log_idx
+        }
+        else {
+            comp_idx
+        }
+    }));
+    qn.add_transition(comp_idx, Box::new(move | r: &Request | {
+        cache_copy.borrow_mut().update(r.get_content());
+        log_idx
+    }));
+
+    for _ in 0..100000 {
+        qn.make_transition();
     }
-    println!("");
-    cache.update(4);
-    for iter in cache.iter() {
-        print!("{} ", iter)
-    }
-    println!("");
-    cache.update(5);
-    for iter in cache.iter() {
-        print!("{} ", iter)
-    }
-    println!("");
-    cache.update(3);
-    for iter in cache.iter() {
-        print!("{} ", iter)
-    }
-    println!("");
-    cache.update(2);
-    for iter in cache.iter() {
-        print!("{} ", iter)
-    }
-    println!("");
-    cache.update(1);
-    for iter in cache.iter() {
-        print!("{} ", iter)
-    }
-    println!("");
-    cache.update(0);
-    for iter in cache.iter() {
-        print!("{} ", iter)
-    }
-    println!("");
-    println!("{}", cache);
 }

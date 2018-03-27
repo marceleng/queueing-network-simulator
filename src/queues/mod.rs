@@ -1,5 +1,6 @@
 pub mod request;
 pub mod mg1ps;
+pub mod mginf;
 pub mod poisson_generator;
 pub mod zipfgen;
 pub mod queueing_network;

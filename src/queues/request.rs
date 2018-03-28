@@ -1,17 +1,17 @@
-static mut REQUEST_COUNTER: u64 = 0;
+static mut REQUEST_COUNTER: usize = 0;
 
 type LogKey   = f64;
 type LogEntry = (usize, usize);
 
 #[derive(PartialEq,Clone,Debug)]
 pub struct Request {
-    id: u64,
-    content: u64,
+    id: usize,
+    content: usize,
     log: Vec<(LogKey, LogEntry)>,
 }
 
 impl Request {
-    pub fn new (content: u64) -> Self {
+    pub fn new (content: usize) -> Self {
         let mut ret = Request {
             id: 0,
             content,
@@ -24,11 +24,11 @@ impl Request {
         ret
     }
 
-    pub fn get_content (&self) -> u64 {
+    pub fn get_content (&self) -> usize {
         self.content
     }
 
-    pub fn get_id(&self) -> u64 {
+    pub fn get_id(&self) -> usize {
         self.id
     }
 

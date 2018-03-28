@@ -11,16 +11,16 @@ pub fn exponential_generator (lambda : f64) -> f64
     v
 }
 
-pub struct ConstantDistribution<T> {
+pub struct ConstantDistribution<T> where T: Copy{
     value: T
 }
 
-impl<T> Sample<T> for ConstantDistribution<T> {
+impl<T> Sample<T> for ConstantDistribution<T> where T: Copy {
     fn sample<R: Rng> (&mut self, _: &mut R) -> T {
         self.value
     }
 }
 
-impl<T> ConstantDistribution<T> {
+impl<T> ConstantDistribution<T> where T: Copy {
     pub fn new(value: T) -> Self { ConstantDistribution { value } }
 }

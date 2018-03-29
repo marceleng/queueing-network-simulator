@@ -14,7 +14,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use rand::distributions::Exp;
-use distribution::ConstantDistribution;
+use distribution::{ConstantDistribution,OffsetExp};
 
 use queues::mg1ps::MG1PS;
 use queues::mginf::MGINF;
@@ -34,9 +34,9 @@ fn main() {
     let x_comp = 1e7;
     let s_raw = 1e6;
     let s_proc = 1e4;
-    let delta_app = 100. * 1e-3;
+    //let delta_app = 100. * 1e-3;
 
-    let s_cachef_B = 1e9;
+    let s_cachef_bytes = 1e9;
     let c_compf = 3. * 1e9;
     let c_acc = (10. / 8.) * 1e9;
     let tau_acc = 4. * 1e-3;
@@ -53,13 +53,13 @@ fn main() {
 
     //let k_LFU_2s = 1.2e6;
     //let k_LFU = 6.1e5;
-    let k_LRU = 1.3e6;
+    let k_lru = 1.3e6;
 
-    let s_cachef = s_cachef_B/s_proc;
+    let s_cachef = s_cachef_bytes/s_proc;
 
     let lambda = 2000.;
 
-    let filter = LruCache::new(k_LRU as usize);
+    let filter = LruCache::new(k_lru as usize);
     let filter_ptr = Rc::new(RefCell::new(filter));
     let fog_cache: LruCache<usize> = LruCache::new(s_cachef as usize);
     let fcache_ptr = Rc::new(RefCell::new(fog_cache));
@@ -74,11 +74,10 @@ fn main() {
     let tls_acc_d = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_tlsf))));
     let tls_acc_u = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_tlsf))));
 
-    let core_d = qn.add_queue(Box::new(MG1PS::new(c_core, Exp::new(s_proc))));
+    let core_d = qn.add_queue(Box::new(MG1PS::new(c_core, OffsetExp::new(tau_core, s_proc))));
     let cloud_proc = qn.add_queue(Box::new(MGINF::new(c_compc, Exp::new(x_comp))));
-    //TODO: add the propagation time?
-    let acc_u = qn.add_queue(Box::new(MG1PS::new(c_acc, Exp::new(s_raw))));
-    let acc_d  = qn.add_queue(Box::new(MG1PS::new(c_acc, Exp::new(s_proc))));
+    let acc_u = qn.add_queue(Box::new(MG1PS::new(c_acc, OffsetExp::new(tau_acc, s_raw))));
+    let acc_d  = qn.add_queue(Box::new(MG1PS::new(c_acc, OffsetExp::new(tau_acc, s_proc))));
     let tls_core_u = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_tlsc))));
     let db_queue = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_db))));
 
@@ -87,8 +86,9 @@ fn main() {
 
     let filter_clone = filter_ptr.clone();
     qn.add_transition(source, Box::new(move |req| {
-        let ret = if filter_clone.borrow().contains(&req.get_content()) { tls_acc_u } else { tls_core_u };
-        filter_clone.borrow_mut().update(req.get_content());
+        let ret = if filter_clone.borrow().contains(&req.get_content()) {
+            filter_clone.borrow_mut().update(req.get_content());
+            tls_acc_u } else { tls_core_u };
         ret
     }));
 
@@ -105,8 +105,10 @@ fn main() {
     }));
     qn.add_transition(tls_acc_d, Box::new(move |_| acc_u));
     qn.add_transition(acc_u, Box::new(move |_| fog_proc));
+    let filter_clone = filter_ptr.clone();
     qn.add_transition(fog_proc, Box::new(move |req| {
         fcache_ptr.borrow_mut().update(req.get_content());
+        filter_clone.borrow_mut().update(req.get_content());
         acc_d
     }));
 
@@ -126,11 +128,14 @@ fn main() {
         ccache_ptr.borrow_mut().update(req.get_content());
         core_d
     }));
-    qn.add_transition(core_d, Box::new(move |_| acc_d));
+    qn.add_transition(core_d, Box::new(move |req| {
+        filter_ptr.borrow_mut().update(req.get_content());
+        acc_d
+    }));
 
     qn.add_transition(acc_d, Box::new(move |_| log));
 
-    for _ in 0..100000000 {
+    for _ in 0..400000000 {
         qn.make_transition();
     }
 }

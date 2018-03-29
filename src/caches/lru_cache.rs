@@ -12,6 +12,7 @@ use std::fmt::{Display,Formatter,Result};
 struct LruNode<T> {
     elem: T,
     child: Link<T>,
+    //TODO: Change to Option<std::ptr::NonNull<LruNode<T>>>
     parent: *mut LruNode<T>,
 }
 
@@ -120,30 +121,55 @@ impl<T> LruCache<T> where T: Hash+Eq+Copy {
             unsafe {
                 self.rm_node(node_ptr);
             }
-                /*
-                self.nb_objects -= 1;
-                unsafe {
-                    let parent_ptr = (*node_ptr).parent;
-                    if parent_ptr.is_null() { //It's the head
-                        let mut ret = self.head.take().unwrap(); // This should really never be None
-                        self.head = ret.child.take();
-                        if let Some(ref mut head) = self.head {
-                            head.parent = ptr::null_mut();
-                        }
-                        ret
-                    }
-                    else {
-                        let mut ret = (*parent_ptr).child.take().unwrap();
-                        if let Some(ref mut child) = ret.child {
-                            child.parent = parent_ptr;
-                        }
-                        (*parent_ptr).child = ret.child.take();
-                        ret
-                    }
+        }
+    }
+
+    pub fn resize(&mut self, new_size: usize) {
+        self.lru_size = new_size;
+        let diff = self.nb_objects - self.lru_size;
+        if diff > 0 {
+            self.pop_n_nodes(diff);
+        }
+    }
+
+    fn resize_and_return (&mut self, new_size : usize) -> Option<Box<LruNode<T>>> {
+        self.lru_size = new_size;
+        let diff = self.nb_objects - self.lru_size;
+        if diff > 0 {
+            self.pop_n_nodes(diff)
+        }
+        else {
+            None
+        }
+    }
+
+    fn pop_n_nodes (&mut self, n: usize) -> Option<Box<LruNode<T>>> {
+
+        assert!(n <= self.nb_objects, "Tried to remove too many objects from Lru Cache");
+
+        if n > 0 {
+            let mut n = n;
+            self.nb_objects -= n;
+
+            unsafe {
+                let mut cur_node = self.tail;
+                while n > 0 {
+                    n -= 1;
+                    cur_node = (*cur_node).parent;
                 }
-            },
-            None => Box::new(LruNode::new(entry))
-            */
+                if (*cur_node).parent.is_null() { //It's the head
+                    self.tail = ptr::null_mut();
+                    self.head.take()
+                }
+                else {
+                    let parent = (*cur_node).parent;
+                    self.tail = parent;
+                    (*cur_node).parent = ptr::null_mut();
+                    (*parent).child.take()
+                }
+            }
+        } else {
+            None
         }
     }
 
@@ -216,6 +242,43 @@ impl<T> Drop for LruCache<T> where T: Hash+Eq+Copy {
         }
     }
 }
+
+type Pit<IdType: Hash+Eq> = HashMap<IdType, f64>;
+
+pub struct PitLruFilter<ContentType, IdType, OptFunc> where
+    IdType: Hash+Eq,
+    OptFunc: Fn(&Pit<IdType>) -> usize,
+    ContentType: Hash+Eq+Copy
+{
+    filter_limit: usize,
+    pit: Pit<IdType>,
+    accept: LruCache<ContentType>,
+    refuse: LruCache<ContentType>,
+    opt_func: OptFunc
+}
+
+
+impl<ContentType, IdType, OptFunc> PitLruFilter<ContentType, IdType, OptFunc> where
+    IdType: Hash+Eq,
+    OptFunc: Fn(&Pit<IdType>) -> usize,
+    ContentType: Hash+Eq+Copy
+{
+    pub fn new (filter_max_size: usize, opt_func: OptFunc) -> Self {
+        PitLruFilter {
+            filter_limit: filter_max_size,
+            pit: Pit::new(),
+            accept: LruCache::new(filter_max_size),
+            refuse: LruCache::new(0),
+            opt_func
+        }
+    }
+
+    fn recompute_filter_pos (&mut self) {
+        let diff = (self.opt_func)(&self.pit);
+    }
+}
+
+
 
 impl<T> Iterator for IntoIter<T> where T: Hash+Eq+Copy {
     type Item = T;

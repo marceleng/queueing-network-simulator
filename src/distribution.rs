@@ -24,3 +24,23 @@ impl<T> Sample<T> for ConstantDistribution<T> where T: Copy {
 impl<T> ConstantDistribution<T> where T: Copy {
     pub fn new(value: T) -> Self { ConstantDistribution { value } }
 }
+
+pub struct OffsetExp {
+    exp: Exp,
+    offset: f64
+}
+
+impl OffsetExp {
+    pub fn new(offset: f64, lambda: f64) -> Self {
+        OffsetExp {
+            exp: Exp::new(lambda),
+            offset
+        }
+    }
+}
+
+impl Sample<f64> for OffsetExp {
+    fn sample<R: Rng> (&mut self, r: &mut R) -> f64 {
+        self.offset + self.exp.sample(r)
+    }
+}

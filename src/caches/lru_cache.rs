@@ -353,7 +353,31 @@ impl<ContentType, IdType, OptFunc> PitLruFilter<ContentType, IdType, OptFunc> wh
 }
 
 
+impl<ContentType, IdType, OptFunc> Cache<ContentType> for PitLruFilter<ContentType, IdType, OptFunc> where
+    IdType: Hash+Eq,
+    OptFunc: Fn(&Self) -> usize,
+    ContentType: Hash+Eq+Copy
+{
+    fn contains (&self, entry: &ContentType) -> bool
+    {
+        //TODO: update PIT
+        self.accept.contains(entry)
+    }
 
+    fn update (&mut self, entry: ContentType)
+    {
+        self.accept.rm_node_if_exists(entry);
+        let node = Box::new(LruNode::new(entry));
+        self.accept.push_head(node);
+        if self.accept.nb_objects > self.accept.lru_size {
+            let elem_opt = self.accept.pop_tail();
+            if let Some(elem) = elem_opt {
+                self.refuse.update(elem);
+            }
+        }
+        //TODO: update PIT and recompute filter size if necessary
+    }
+}
 impl<T> Iterator for IntoIter<T> where T: Hash+Eq+Copy {
     type Item = T;
     fn next (&mut self) -> Option<Self::Item> {

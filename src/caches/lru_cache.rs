@@ -126,28 +126,34 @@ impl<T> LruCache<T> where T: Hash+Eq+Copy {
 
     pub fn resize(&mut self, new_size: usize) {
         self.lru_size = new_size;
-        let diff = self.nb_objects - self.lru_size;
-        if diff > 0 {
-            self.pop_n_nodes(diff);
+        if self.nb_objects > self.lru_size {
+            let diff = self.nb_objects - self.lru_size;
+            self.pop_back_n_nodes(diff);
         }
     }
 
-    fn resize_and_return (&mut self, new_size : usize) -> Option<Box<LruNode<T>>> {
+    fn resize_and_return (&mut self, new_size : usize) -> Option<LruCache<T>> {
         self.lru_size = new_size;
-        let diff = self.nb_objects - self.lru_size;
-        if diff > 0 {
-            self.pop_n_nodes(diff)
+        if self.nb_objects > new_size {
+            let diff = self.nb_objects - new_size;
+            Some(self.pop_back_n_nodes(diff))
         }
         else {
             None
         }
     }
 
-    fn pop_n_nodes (&mut self, n: usize) -> Option<Box<LruNode<T>>> {
+    fn pop_back_n_nodes (&mut self, n: usize) -> LruCache<T> {
 
         assert!(n <= self.nb_objects, "Tried to remove too many objects from Lru Cache");
 
+        let mut new_head : Option<Box<LruNode<T>>> = None;
+        let mut new_tail : *mut LruNode<T> = ptr::null_mut();
+        let mut new_hash_map: HashMap<T, *mut LruNode<T>> = HashMap::new();
+
         if n > 0 {
+            new_tail = self.tail;
+
             let mut n = n;
             self.nb_objects -= n;
 
@@ -155,21 +161,35 @@ impl<T> LruCache<T> where T: Hash+Eq+Copy {
                 let mut cur_node = self.tail;
                 while n > 0 {
                     n -= 1;
+                    self.nodes.remove(&(*cur_node).elem);
+                    new_hash_map.insert((*cur_node).elem, cur_node);
                     cur_node = (*cur_node).parent;
                 }
                 if (*cur_node).parent.is_null() { //It's the head
                     self.tail = ptr::null_mut();
-                    self.head.take()
+                    new_head = self.head.take()
                 }
                 else {
                     let parent = (*cur_node).parent;
                     self.tail = parent;
                     (*cur_node).parent = ptr::null_mut();
-                    (*parent).child.take()
+                    new_head = (*parent).child.take()
                 }
             }
-        } else {
-            None
+        }
+
+        LruCache {
+            lru_size: n,
+            nb_objects: n,
+            head: new_head,
+            tail: new_tail,
+            nodes: new_hash_map
+        }
+    }
+
+    fn update_all (&mut self, other: LruCache<T>) {
+        for elem in other.into_iter() {
+            self.update(elem);
         }
     }
 
@@ -247,7 +267,7 @@ type Pit<IdType: Hash+Eq> = HashMap<IdType, f64>;
 
 pub struct PitLruFilter<ContentType, IdType, OptFunc> where
     IdType: Hash+Eq,
-    OptFunc: Fn(&Pit<IdType>) -> usize,
+    OptFunc: Fn(&PitLruFilter<ContentType, IdType, OptFunc>) -> usize,
     ContentType: Hash+Eq+Copy
 {
     filter_limit: usize,
@@ -260,7 +280,7 @@ pub struct PitLruFilter<ContentType, IdType, OptFunc> where
 
 impl<ContentType, IdType, OptFunc> PitLruFilter<ContentType, IdType, OptFunc> where
     IdType: Hash+Eq,
-    OptFunc: Fn(&Pit<IdType>) -> usize,
+    OptFunc: Fn(&Self) -> usize,
     ContentType: Hash+Eq+Copy
 {
     pub fn new (filter_max_size: usize, opt_func: OptFunc) -> Self {
@@ -274,7 +294,61 @@ impl<ContentType, IdType, OptFunc> PitLruFilter<ContentType, IdType, OptFunc> wh
     }
 
     fn recompute_filter_pos (&mut self) {
-        let diff = (self.opt_func)(&self.pit);
+        let new_size = (self.opt_func)(&self);
+        assert!(new_size <= self.filter_limit);
+
+        if new_size > self.accept.lru_size {
+            self.accept.resize(new_size);
+            let mut to_insert = new_size - self.accept.lru_size;
+
+            if self.accept.tail.is_null() { //Accept is empty
+                self.accept.head = self.refuse.head.take();
+                if let Some(ref head) = self.accept.head {
+                    let tail_elem = head.elem;
+                    let tail_ptr = self.refuse.nodes.remove(&tail_elem).unwrap();
+                    self.accept.tail = tail_ptr;
+                    self.accept.nodes.insert(tail_elem, tail_ptr);
+                    to_insert -= 1;
+                }
+                else { //Both LRU are empty
+                    return;
+                }
+            }
+            else {
+                unsafe {
+                    (*self.accept.tail).child = self.refuse.head.take();
+                }
+            }
+
+            for _ in 0..to_insert {
+                unsafe {
+                    //It's not null, otherwise we would have returned earlier
+                    match (*self.accept.tail).child {
+                        Some (ref new_tail) => {
+                            let tail_elem = new_tail.elem;
+                            let tail_ptr  = self.refuse.nodes.remove(&tail_elem).unwrap();
+                            self.accept.tail = tail_ptr;
+                            self.accept.nodes.insert(tail_elem, tail_ptr);
+                        }
+                        None => { break; }
+                    }
+                }
+            }
+            if !self.accept.tail.is_null() {
+                unsafe {
+                    self.refuse.head = (*self.accept.tail).child.take();
+                }
+            }
+        }
+        else if new_size < self.accept.lru_size {
+            assert!(self.filter_limit - new_size > self.refuse.lru_size);
+
+            self.refuse.resize(self.filter_limit - new_size);
+            while self.accept.nb_objects > new_size {
+                self.refuse.update(self.accept.pop_tail().unwrap());
+            }
+            self.accept.resize(new_size);
+        }
     }
 }
 

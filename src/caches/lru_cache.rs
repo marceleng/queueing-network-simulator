@@ -230,7 +230,7 @@ impl<T> Display for LruCache<T> where T: Hash+Eq+Copy+Display {
 
 impl<T> Cache<T> for LruCache<T> where T: Hash+Eq+Copy {
 
-    fn contains (&self, entry: &T) -> bool {
+    fn contains (&mut self, entry: &T) -> bool {
         match self.nodes.get(entry) {
             None => false,
             Some(&node) => {
@@ -271,6 +271,7 @@ pub struct PitLruFilter<ContentType, IdType, OptFunc> where
     ContentType: Hash+Eq+Copy
 {
     filter_limit: usize,
+    time: f64,
     pit: Pit<IdType>,
     accept: LruCache<ContentType>,
     refuse: LruCache<ContentType>,
@@ -286,6 +287,7 @@ impl<ContentType, IdType, OptFunc> PitLruFilter<ContentType, IdType, OptFunc> wh
     pub fn new (filter_max_size: usize, opt_func: OptFunc) -> Self {
         PitLruFilter {
             filter_limit: filter_max_size,
+            time: 0.,
             pit: Pit::new(),
             accept: LruCache::new(filter_max_size),
             refuse: LruCache::new(0),
@@ -350,24 +352,30 @@ impl<ContentType, IdType, OptFunc> PitLruFilter<ContentType, IdType, OptFunc> wh
             self.accept.resize(new_size);
         }
     }
+
+    pub fn update_time(&mut self, time: f64)
+    {
+        self.time = time;
+    }
 }
 
 
-impl<ContentType, IdType, OptFunc> Cache<ContentType> for PitLruFilter<ContentType, IdType, OptFunc> where
-    IdType: Hash+Eq,
+impl<ContentType, IdType, OptFunc> Cache<(IdType, ContentType)> for PitLruFilter<ContentType, IdType, OptFunc> where
+    IdType: Hash+Eq+Copy,
     OptFunc: Fn(&Self) -> usize,
     ContentType: Hash+Eq+Copy
 {
-    fn contains (&self, entry: &ContentType) -> bool
+    fn contains (&mut self, entry: &(IdType, ContentType)) -> bool
     {
-        //TODO: update PIT
-        self.accept.contains(entry)
+        let id = entry.0;
+        self.pit.insert(id, self.time);
+        self.accept.contains(&entry.1)
     }
 
-    fn update (&mut self, entry: ContentType)
+    fn update (&mut self, entry: (IdType, ContentType))
     {
-        self.accept.rm_node_if_exists(entry);
-        let node = Box::new(LruNode::new(entry));
+        self.accept.rm_node_if_exists(entry.1);
+        let node = Box::new(LruNode::new(entry.1));
         self.accept.push_head(node);
         if self.accept.nb_objects > self.accept.lru_size {
             let elem_opt = self.accept.pop_tail();
@@ -375,7 +383,7 @@ impl<ContentType, IdType, OptFunc> Cache<ContentType> for PitLruFilter<ContentTy
                 self.refuse.update(elem);
             }
         }
-        //TODO: update PIT and recompute filter size if necessary
+        let _arrival_time = self.pit.remove(&entry.0);
     }
 }
 impl<T> Iterator for IntoIter<T> where T: Hash+Eq+Copy {

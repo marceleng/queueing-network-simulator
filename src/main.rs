@@ -4,6 +4,7 @@
 mod queues;
 mod caches;
 mod zipf;
+mod p2;
 pub mod float_binaryheap;
 pub mod llist;
 pub mod distribution;
@@ -86,17 +87,21 @@ fn main() {
 
     let filter_clone = filter_ptr.clone();
     qn.add_transition(source, Box::new(move |req| {
-        let ret = if filter_clone.borrow().contains(&req.get_content()) {
-            filter_clone.borrow_mut().update(req.get_content());
-            tls_acc_u } else { tls_core_u };
+        let mut cache = filter_clone.borrow_mut();
+        let ret =
+            if cache.contains(&req.get_content()) {
+                cache.update(req.get_content());
+                tls_acc_u }
+            else { tls_core_u };
         ret
     }));
 
     //FOG
     let fcache_clone = fcache_ptr.clone();
     qn.add_transition(tls_acc_u, Box::new(move |req| {
-        if fcache_clone.borrow().contains(&req.get_content()) {
-            fcache_clone.borrow_mut().update(req.get_content());
+        let mut cache = fcache_clone.borrow_mut();
+        if cache.contains(&req.get_content()) {
+            cache.update(req.get_content());
             acc_d
         }
         else {
@@ -115,8 +120,9 @@ fn main() {
     //CLOUD
     let ccache_clone = ccache_ptr.clone();
     qn.add_transition(tls_core_u, Box::new(move |req| {
-        if ccache_clone.borrow().contains(&req.get_content()) {
-            ccache_clone.borrow_mut().update(req.get_content());
+        let mut cache = ccache_clone.borrow_mut();
+        if cache.contains(&req.get_content()) {
+            cache.update(req.get_content());
             core_d
         }
         else {

@@ -24,7 +24,7 @@ use queues::queueing_network::QNet;
 use queues::file_logger::FileLogger;
 
 
-use caches::lru_cache::LruCache;
+use caches::lru_cache::{LruCache,P2LruFilter,P2LruFilterCont};
 use caches::Cache;
 
 fn main() {
@@ -35,7 +35,9 @@ fn main() {
     let x_comp = 1e7;
     let s_raw = 1e6;
     let s_proc = 1e4;
-    //let delta_app = 100. * 1e-3;
+    let delta_app = 100. * 1e-3;
+
+    let percentile = 0.99;
 
     let s_cachef_bytes = 1e9;
     let c_compf = 3. * 1e9;
@@ -60,7 +62,7 @@ fn main() {
 
     let lambda = 2000.;
 
-    let filter = LruCache::new(k_lru as usize);
+    let filter = P2LruFilter::new(k_lru as usize, delta_app, percentile);
     let filter_ptr = Rc::new(RefCell::new(filter));
     let fog_cache: LruCache<usize> = LruCache::new(s_cachef as usize);
     let fcache_ptr = Rc::new(RefCell::new(fog_cache));
@@ -88,9 +90,10 @@ fn main() {
     let filter_clone = filter_ptr.clone();
     qn.add_transition(source, Box::new(move |req| {
         let mut cache = filter_clone.borrow_mut();
+        let content = (req.get_id(), req.get_content());
         let ret =
-            if cache.contains(&req.get_content()) {
-                cache.update(req.get_content());
+            if cache.contains(&content) {
+                cache.update(content);
                 tls_acc_u }
             else { tls_core_u };
         ret
@@ -113,7 +116,7 @@ fn main() {
     let filter_clone = filter_ptr.clone();
     qn.add_transition(fog_proc, Box::new(move |req| {
         fcache_ptr.borrow_mut().update(req.get_content());
-        filter_clone.borrow_mut().update(req.get_content());
+        filter_clone.borrow_mut().update((req.get_id(), req.get_content()));
         acc_d
     }));
 
@@ -134,12 +137,16 @@ fn main() {
         ccache_ptr.borrow_mut().update(req.get_content());
         core_d
     }));
+
+    let filter_ptr_1 = filter_ptr.clone();
     qn.add_transition(core_d, Box::new(move |req| {
-        filter_ptr.borrow_mut().update(req.get_content());
+        filter_ptr_1.borrow_mut().update((req.get_id(), req.get_content()));
         acc_d
     }));
 
     qn.add_transition(acc_d, Box::new(move |_| log));
+
+    qn.add_queue(Box::new(P2LruFilterCont::new(filter_ptr)));
 
     for _ in 0..400000000 {
         qn.make_transition();

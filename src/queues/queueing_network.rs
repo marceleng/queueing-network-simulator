@@ -9,6 +9,7 @@ pub struct QNet {
     number_of_queues: usize,
     queues: Vec<Box<Queue>>,
     transitions: Vec<Option<Transition>>,
+    time: f64
 }
 
 impl QNet {
@@ -17,7 +18,8 @@ impl QNet {
         QNet {
             number_of_queues: 0,
             queues : Vec::new(),
-            transitions: Vec::new()
+            transitions: Vec::new(),
+            time: 0.,
         }
     }
 
@@ -55,6 +57,7 @@ impl QNet {
 
         if orig_q < self.number_of_queues {
             if let Some((t,mut r)) = self.queues[orig_q].pop_next_exit() {
+                self.time = t;
                 //TODO: figure out how to use iterator instead
                 for queue in 0..self.number_of_queues {
                     self.queues[queue].update_time(t)
@@ -69,5 +72,9 @@ impl QNet {
                 }
             }
         }
+    }
+
+    pub fn get_time(&self) -> f64 {
+        self.time
     }
 }

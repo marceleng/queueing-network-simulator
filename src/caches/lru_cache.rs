@@ -1,4 +1,6 @@
 use caches::Cache;
+use p2::P2;
+use queues::Queue;
 
 use std::iter::Iterator;
 use std::hash::Hash;
@@ -8,6 +10,11 @@ use std::collections::HashMap;
 
 use std::ptr;
 use std::fmt::{Display,Formatter,Result};
+
+use std::rc::Rc;
+use std::cell::RefCell;
+
+use queues::request::Request;
 
 struct LruNode<T> {
     elem: T,
@@ -265,38 +272,57 @@ impl<T> Drop for LruCache<T> where T: Hash+Eq+Copy {
 
 type Pit<IdType: Hash+Eq> = HashMap<IdType, f64>;
 
-pub struct PitLruFilter<ContentType, IdType, OptFunc> where
+pub struct P2LruFilter<ContentType, IdType> where
     IdType: Hash+Eq,
-    OptFunc: Fn(&PitLruFilter<ContentType, IdType, OptFunc>) -> usize,
     ContentType: Hash+Eq+Copy
 {
+    latency_limit: f64,
     filter_limit: usize,
     time: f64,
     pit: Pit<IdType>,
     accept: LruCache<ContentType>,
     refuse: LruCache<ContentType>,
-    opt_func: OptFunc
+    p2: P2,
 }
 
 
-impl<ContentType, IdType, OptFunc> PitLruFilter<ContentType, IdType, OptFunc> where
+impl<ContentType, IdType> P2LruFilter<ContentType, IdType> where
     IdType: Hash+Eq,
-    OptFunc: Fn(&Self) -> usize,
     ContentType: Hash+Eq+Copy
 {
-    pub fn new (filter_max_size: usize, opt_func: OptFunc) -> Self {
-        PitLruFilter {
+    pub fn new (filter_max_size: usize, latency_limit: f64, percentile: f64) -> Self {
+        P2LruFilter {
+            latency_limit,
             filter_limit: filter_max_size,
             time: 0.,
             pit: Pit::new(),
             accept: LruCache::new(filter_max_size),
             refuse: LruCache::new(0),
-            opt_func
+            p2: P2::new(percentile)
         }
     }
 
-    fn recompute_filter_pos (&mut self) {
-        let new_size = (self.opt_func)(&self);
+    fn opt_func(&mut self, cur_value: f64, last_measurement: f64) -> f64 {
+        self.p2.new_sample(last_measurement);
+        if let Some(curr_quantile) = self.p2.get_quantile() {
+            //TODO find something more clever here
+            //TODO eg: PI(D) controller?
+            let diff = self.latency_limit - curr_quantile;
+            if diff > 0. { //Filter must get bigger
+                cur_value + (self.filter_limit as f64 - cur_value) * diff / self.latency_limit
+            }
+            else { //Filter must get smaller
+                cur_value * (1. + diff / curr_quantile)
+            }
+        }
+        else {
+            cur_value
+        }
+    }
+
+    fn recompute_filter_pos (&mut self, last_measurement: f64) {
+        let old_size = self.accept.lru_size;
+        let new_size = self.opt_func(old_size as f64, last_measurement) as usize;
         assert!(new_size <= self.filter_limit);
 
         if new_size > self.accept.lru_size {
@@ -352,17 +378,11 @@ impl<ContentType, IdType, OptFunc> PitLruFilter<ContentType, IdType, OptFunc> wh
             self.accept.resize(new_size);
         }
     }
-
-    pub fn update_time(&mut self, time: f64)
-    {
-        self.time = time;
-    }
 }
 
 
-impl<ContentType, IdType, OptFunc> Cache<(IdType, ContentType)> for PitLruFilter<ContentType, IdType, OptFunc> where
+impl<ContentType, IdType> Cache<(IdType, ContentType)> for P2LruFilter<ContentType, IdType> where
     IdType: Hash+Eq+Copy,
-    OptFunc: Fn(&Self) -> usize,
     ContentType: Hash+Eq+Copy
 {
     fn contains (&mut self, entry: &(IdType, ContentType)) -> bool
@@ -383,9 +403,43 @@ impl<ContentType, IdType, OptFunc> Cache<(IdType, ContentType)> for PitLruFilter
                 self.refuse.update(elem);
             }
         }
-        let _arrival_time = self.pit.remove(&entry.0);
+        if let Some(arrival_time) = self.pit.remove(&entry.0) {
+            let diff = self.time - arrival_time;
+            self.recompute_filter_pos(diff);
+        }
     }
 }
+
+pub struct P2LruFilterCont<C,I> where
+    I: Hash+Eq+Copy,
+    C: Hash+Eq+Copy
+{
+    f: Rc<RefCell<P2LruFilter<C,I>>>
+}
+
+impl<C,I> P2LruFilterCont<C,I> where
+    I: Hash+Eq+Copy,
+    C: Hash+Eq+Copy
+{
+    pub fn new(f: Rc<RefCell<P2LruFilter<C,I>>>) -> Self {
+        P2LruFilterCont {
+            f
+        }
+    }
+}
+
+impl<C,I> Queue for P2LruFilterCont<C,I> where
+    I: Hash+Eq+Copy,
+    C: Hash+Eq+Copy
+{
+    fn arrival(&mut self, _: Request) {}
+    fn update_time    (&mut self, time: f64) {
+        self.f.borrow_mut().time = time
+    }
+    fn read_next_exit (&self) -> Option<(f64,&Request)> { None }
+    fn pop_next_exit  (&mut self) -> Option<(f64,Request)> { None }
+}
+
 impl<T> Iterator for IntoIter<T> where T: Hash+Eq+Copy {
     type Item = T;
     fn next (&mut self) -> Option<Self::Item> {

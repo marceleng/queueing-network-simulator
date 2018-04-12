@@ -92,8 +92,8 @@ impl<T> FloatBinaryHeap<T> where T: PartialEq {
             Ok(num) => num,
             Err(_) => panic!("Translation value is NaN")
         };
-        for item in items {
-            item.key.add(translation);
+        for mut item in items {
+            item.key += translation;
             self.heap.push(item)
         }
     }

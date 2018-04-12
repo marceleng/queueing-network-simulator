@@ -4,25 +4,22 @@ use self::ordered_float::NotNaN;
 
 static NB_MARKERS: usize = 5;
 
-struct P2 {
-    p: NotNaN<f64>,
+#[derive(Debug)]
+pub struct P2 {
     heights: Vec<NotNaN<f64>>,
     positions: Vec<usize>,
     npos: Vec<NotNaN<f64>>,
     incr: Vec<NotNaN<f64>>,
-    count: usize,
 }
 
 impl P2 {
 
     pub fn new (p: f64) -> Self {
         P2 {
-            p: NotNaN::new(p).unwrap(),
             heights: Vec::with_capacity(5),
             positions: (1..(NB_MARKERS+1)).collect::<Vec<usize>>(),
             npos: vec![1., 1.+2.*p, 1.+4.*p, 3.+2.*p, 5.].into_iter().map(|x| NotNaN::new(x).unwrap()).collect::<Vec<NotNaN<f64>>>(),
             incr: vec![0., p/2., p, (1.+p) / 2., 1.].into_iter().map(|x| NotNaN::new(x).unwrap()).collect::<Vec<NotNaN<f64>>>(),
-            count: 0
         }
     }
 
@@ -57,13 +54,15 @@ impl P2 {
 
     fn adjust(&mut self) {
         for i in 1..4 {
-            let d = self.npos[i] - self.positions[i] as f64;
+            let d = self.npos[i] - (self.positions[i] as f64);
             let d = d.into_inner();
 
             if ((d >= 1.) && ((self.positions[i+1]-self.positions[i]) > 1)) ||
                 ((d<= -1.) && ((self.positions[i]-self.positions[i-1]) > 1)) {
+
                 let d = if d >= 0. {1.} else {-1.};
                 let new_height = self.parabolic_formula(i, d);
+
                 if (self.heights[i-1] < new_height) && (new_height < self.heights[i+1]) {
                     self.heights[i] = new_height;
                 }
@@ -79,29 +78,29 @@ impl P2 {
 
     pub fn new_sample (&mut self, sample: f64) {
         let sample = NotNaN::new(sample).unwrap();
-        self.count += 1;
-        if self.count <= 5 {
+        let hlen = self.heights.len();
+        if hlen < 5 {
             self.heights.push(sample);
-        }
-        else {
-            if self.count == 6 {
+            if (hlen+1) == 5 {
                 self.heights.sort();
             }
+        }
+        else {
 
             let mut k = 1;
             if sample < self.heights[0] {
                 self.heights[0] = sample;
             }
             else {
-                while (sample >= self.heights[k-1]) && (k<=4) {
+                while (sample >= self.heights[k]) && (k<=3) {
                     k += 1;
                 }
                 if sample > self.heights[4] {
                     self.heights[4] = sample;
-                    k = 4;
+                    assert!(k == 4);
                 }
             }
-            
+
             for i in k..5 {
                 self.positions[i] += 1;
             }
@@ -110,17 +109,27 @@ impl P2 {
                 self.npos[i] = self.npos[i] + self.incr[i]
             }
 
+
             self.adjust ();
         }
 
     }
 
     pub fn get_quantile(&self) -> Option<f64> {
-        if self.count >= 5 {
+        if self.heights.len() == 5 {
             Some(self.heights[2].into_inner())
         }
         else {
             None
         }
+    }
+
+    pub fn print(&self) {
+        println!("Heights: {:?}\nPos: {:?}\nnpos {:?}\ndn {:?}",
+                 self.heights.iter().map(|x| x.into_inner()).collect::<Vec<f64>>(),
+                 self.positions,
+                 self.npos.iter().map(|x| x.into_inner()).collect::<Vec<f64>>(),
+                 self.incr.iter().map(|x| x.into_inner()).collect::<Vec<f64>>(),
+                 );
     }
 }

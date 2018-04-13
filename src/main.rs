@@ -32,7 +32,7 @@ fn main() {
     let catalogue_size = 10000000;
     let alpha = 1.01;
 
-    let x_comp = 1e7;
+    let x_comp = 1.;
     let s_raw = 1e6;
     let s_proc = 1e4;
     let delta_app = 100. * 1e-3;
@@ -40,12 +40,12 @@ fn main() {
     let percentile = 0.99;
 
     let s_cachef_bytes = 1e9;
-    let c_compf = 3. * 1e9;
+    let c_compf = 3. * 1e2;
     let c_acc = (10. / 8.) * 1e9;
     let tau_acc = 4. * 1e-3;
     let tau_tlsf = tau_acc;
 
-    let c_compc = 2e9;
+    let c_compc = 2e2;
     let tau_db = 1e-3;
     let c_core = (1./8.) * (1e9);
     let tau_core = 40. * 1e-3;
@@ -62,7 +62,7 @@ fn main() {
 
     let lambda = 2000.;
 
-    let filter = P2LruFilter::new(k_lru as usize, delta_app, percentile);
+    let filter = P2LruFilter::new(k_lru as usize, delta_app-tau_acc, percentile);
     let filter_ptr = Rc::new(RefCell::new(filter));
     let fog_cache: LruCache<usize> = LruCache::new(s_cachef as usize);
     let fcache_ptr = Rc::new(RefCell::new(fog_cache));
@@ -92,9 +92,7 @@ fn main() {
         let mut cache = filter_clone.borrow_mut();
         let content = (req.get_id(), req.get_content());
         let ret =
-            if cache.contains(&content) {
-                cache.update(content);
-                tls_acc_u }
+            if cache.contains(&content) { tls_acc_u }
             else { tls_core_u };
         ret
     }));
@@ -151,4 +149,5 @@ fn main() {
     for _ in 0..400000000 {
         qn.make_transition();
     }
+    println!("Done");
 }

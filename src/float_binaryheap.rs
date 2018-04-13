@@ -5,7 +5,6 @@ use self::ordered_float::NotNaN;
 use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use self::num_traits::cast::ToPrimitive;
-use std::ops::Add;
 
 #[derive(PartialEq)]
 struct HeapEntry<T> where T: PartialEq {

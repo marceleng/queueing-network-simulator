@@ -6,6 +6,8 @@ use std::iter::Iterator;
 use std::hash::Hash;
 use std::cmp::Eq;
 
+use std::mem;
+
 use std::collections::HashMap;
 
 use std::ptr;
@@ -282,7 +284,9 @@ pub struct P2LruFilter<ContentType, IdType> where
     pit: Pit<IdType>,
     accept: LruCache<ContentType>,
     refuse: LruCache<ContentType>,
-    p2: P2,
+    percentile: f64,
+    p2_cur: P2,
+    p2_train: P2,
 }
 
 
@@ -298,13 +302,25 @@ impl<ContentType, IdType> P2LruFilter<ContentType, IdType> where
             pit: Pit::new(),
             accept: LruCache::new(filter_max_size),
             refuse: LruCache::new(0),
-            p2: P2::new(percentile)
+            percentile,
+            p2_cur: P2::new(percentile),
+            p2_train: P2::new(percentile),
         }
     }
 
     fn opt_func(&mut self, cur_value: f64, last_measurement: f64) -> f64 {
-        self.p2.new_sample(last_measurement);
-        if let Some(curr_quantile) = self.p2.get_quantile() {
+        self.p2_cur.new_sample(last_measurement);
+        self.p2_train.new_sample(last_measurement);
+
+        if let Some(_) = self.p2_train.get_quantile() {
+            self.p2_cur = mem::replace(&mut self.p2_train, P2::new(self.percentile));
+        }
+
+        if let Some(curr_quantile) = self.p2_cur.get_quantile() {
+            if last_measurement > 0.095 { 
+                println!("cur_value: {}, quantile:{}, sample: {}", cur_value, curr_quantile, last_measurement);
+            }
+
             //TODO find something more clever here
             //TODO eg: PI(D) controller?
             let diff = self.latency_limit - curr_quantile;
@@ -323,11 +339,15 @@ impl<ContentType, IdType> P2LruFilter<ContentType, IdType> where
     fn recompute_filter_pos (&mut self, last_measurement: f64) {
         let old_size = self.accept.lru_size;
         let new_size = self.opt_func(old_size as f64, last_measurement) as usize;
-        assert!(new_size <= self.filter_limit);
+        if new_size != old_size {
+            assert!(new_size <= self.filter_limit);
+
+            println!("New size: {}", new_size);
+        }
 
         if new_size > self.accept.lru_size {
             self.accept.resize(new_size);
-            let mut to_insert = new_size - self.accept.lru_size;
+            let mut to_insert = new_size - self.accept.nb_objects;
 
             if self.accept.tail.is_null() { //Accept is empty
                 self.accept.head = self.refuse.head.take();
@@ -367,6 +387,7 @@ impl<ContentType, IdType> P2LruFilter<ContentType, IdType> where
                     self.refuse.head = (*self.accept.tail).child.take();
                 }
             }
+            self.refuse.resize(self.filter_limit - new_size);
         }
         else if new_size < self.accept.lru_size {
             assert!(self.filter_limit - new_size > self.refuse.lru_size);
@@ -382,7 +403,7 @@ impl<ContentType, IdType> P2LruFilter<ContentType, IdType> where
 
 
 impl<ContentType, IdType> Cache<(IdType, ContentType)> for P2LruFilter<ContentType, IdType> where
-    IdType: Hash+Eq+Copy,
+    IdType: Hash+Eq+Copy+Display,
     ContentType: Hash+Eq+Copy
 {
     fn contains (&mut self, entry: &(IdType, ContentType)) -> bool
@@ -406,6 +427,9 @@ impl<ContentType, IdType> Cache<(IdType, ContentType)> for P2LruFilter<ContentTy
         if let Some(arrival_time) = self.pit.remove(&entry.0) {
             let diff = self.time - arrival_time;
             self.recompute_filter_pos(diff);
+        }
+        else {
+            panic!("Entry {} not found in PIT", entry.0);
         }
     }
 }

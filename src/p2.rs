@@ -3,9 +3,11 @@ extern crate ordered_float;
 use self::ordered_float::NotNaN;
 
 static NB_MARKERS: usize = 5;
+static CONV_MIN: usize=500;
 
 #[derive(Debug)]
 pub struct P2 {
+    count : usize,
     heights: Vec<NotNaN<f64>>,
     positions: Vec<usize>,
     npos: Vec<NotNaN<f64>>,
@@ -16,6 +18,7 @@ impl P2 {
 
     pub fn new (p: f64) -> Self {
         P2 {
+            count: 0,
             heights: Vec::with_capacity(5),
             positions: (1..(NB_MARKERS+1)).collect::<Vec<usize>>(),
             npos: vec![1., 1.+2.*p, 1.+4.*p, 3.+2.*p, 5.].into_iter().map(|x| NotNaN::new(x).unwrap()).collect::<Vec<NotNaN<f64>>>(),
@@ -77,6 +80,7 @@ impl P2 {
 
 
     pub fn new_sample (&mut self, sample: f64) {
+        self.count += 1;
         let sample = NotNaN::new(sample).unwrap();
         let hlen = self.heights.len();
         if hlen < 5 {
@@ -116,7 +120,7 @@ impl P2 {
     }
 
     pub fn get_quantile(&self) -> Option<f64> {
-        if self.heights.len() == 5 {
+        if self.count > CONV_MIN {
             Some(self.heights[2].into_inner())
         }
         else {

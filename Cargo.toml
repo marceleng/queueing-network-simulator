@@ -1,0 +1,10 @@
+[package]
+name = "queue_sim"
+version = "0.1.0"
+authors = ["Marcel Enguehard <mengueha@cisco.com>"]
+
+[dependencies]
+rand = "0.4"
+ordered-float = "0.5.0"
+num-traits = "0.2"
+statistical = "0.1.1"

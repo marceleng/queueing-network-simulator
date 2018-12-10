@@ -3,19 +3,20 @@
 
 mod queues;
 mod caches;
-mod zipf;
-mod p2;
 pub mod float_binaryheap;
-pub mod llist;
 pub mod distribution;
 
 extern crate rand;
+extern crate zipf;
+
+use zipf::ZipfDistribution;
+use rand::distributions::Distribution;
 
 use std::env;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use rand::distributions::{Sample,Exp};
+use rand::distributions::{Exp};
 use distribution::{ConstantDistribution,OffsetExp};
 
 use queues::mg1ps::MG1PS;
@@ -24,10 +25,9 @@ use queues::zipfgen::ZipfGenerator;
 use queues::queueing_network::QNet;
 use queues::file_logger::FileLogger;
 
-use zipf::Zipf;
 
-
-use caches::lru_cache::{LruCache,P2LruFilter,P2LruFilterCont};
+use caches::lru_cache::LruCache;
+use caches::abf_fpga_cache::AgingBloomFilterFPGA;
 use caches::Cache;
 
 fn run_sim() {
@@ -42,8 +42,8 @@ fn run_sim() {
 
     let percentile = 0.99;
 
-    let s_cachef_bytes = 1e9;
-    //let s_cachef_bytes = 1e5;
+    //let s_cachef_bytes = 1e9;
+    let s_cachef_bytes = 1e5;
     let c_compf = 3. * 1e2;
     let c_acc = (10. / 8.) * 1e9;
     let tau_acc = 4. * 1e-3;
@@ -61,16 +61,19 @@ fn run_sim() {
     //let k_LFU_2s = 1.2e6;
     //let k_LFU = 6.1e5;
     //let k_lru = 1.3e6;
-    let k_lru = 1.3e6;
+    let k_lru = 2.1e5;
+    let na = 149850;
+    let k1 = 387707;
 
     let s_cachef = s_cachef_bytes/s_proc;
 
-    let lambda = 2000.;
+    let lambda = 10000.;
 
     //let mut filter = P2LruFilter::new(5*k_lru as usize, delta_app-tau_acc, percentile);
     //filter.set_optimize(true);
     //let filter = P2LruFilter::new(10, delta_app-tau_acc, percentile);
-    let mut filter: LruCache<usize> = LruCache::new(k_lru as usize);
+    let mut filter = AgingBloomFilterFPGA::new(k1,0.01);
+    //let mut filter: LruCache<usize> = LruCache::new(k_lru as usize);
     let filter_ptr = Rc::new(RefCell::new(filter));
     let fog_cache: LruCache<usize> = LruCache::new(s_cachef as usize);
     let fcache_ptr = Rc::new(RefCell::new(fog_cache));
@@ -78,8 +81,10 @@ fn run_sim() {
     let ccache_ptr = Rc::new(RefCell::new(cloud_cache));
 
     let mut qn = QNet::new();
+    //let source = qn.add_queue(Box::new(
+    //        ZipfGenerator::new(alpha, catalogue_size, |x| Exp::new(x*lambda))));
     let source = qn.add_queue(Box::new(
-            ZipfGenerator::new(alpha, catalogue_size, |x| Exp::new(x*lambda))));
+            ZipfGenerator::new(alpha, catalogue_size, Exp::new(lambda))));
 
     let fog_proc = qn.add_queue(Box::new(MG1PS::new(c_compf, Exp::new(x_comp))));
     let tls_acc_d = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_tlsf))));
@@ -103,6 +108,7 @@ fn run_sim() {
         let ret =
             if cache.contains(&content) { tls_acc_u }
             else { tls_core_u };
+        cache.update(content);
         ret
     }));
 
@@ -149,7 +155,7 @@ fn run_sim() {
     let filter_ptr_1 = filter_ptr.clone();
     qn.add_transition(core_d, Box::new(move |req| {
         //filter_ptr_1.borrow_mut().update((req.get_id(), req.get_content()));
-        filter_ptr_1.borrow_mut().update(req.get_content());
+        //filter_ptr_1.borrow_mut().update(req.get_content());
         //println!("{}", filter_ptr_1.borrow());
         acc_d
     }));
@@ -164,11 +170,13 @@ fn run_sim() {
     println!("Done");
 }
 
-fn sixcn_sim(catalogue_size: usize, alpha: f64, cache_size: usize, filter_size: usize ) {
-     let mut cache: LruCache<u64> = LruCache::new(cache_size);
-     let mut filter: LruCache<u64> = LruCache::new(filter_size);
 
-     let mut source = Zipf::new(alpha, catalogue_size);
+fn sixcn_sim(catalogue_size: usize, alpha: f64, cache_size: usize, filter_size: usize ) {
+     let mut cache: LruCache<usize> = LruCache::new(cache_size);
+     let mut filter: LruCache<usize> = LruCache::new(filter_size);
+
+
+     let source = ZipfDistribution::new(catalogue_size, alpha).unwrap();
 
      let nb_iterations = catalogue_size*10;
      let mut hit_rate = 0.;
@@ -184,15 +192,27 @@ fn sixcn_sim(catalogue_size: usize, alpha: f64, cache_size: usize, filter_size: 
         filter.update(next_content);
      }
 
-     println!("{}", hit_rate);
+     println!("{},{}", filter_size, hit_rate);
 }
 
+
 fn main () {
+   
+    /*
     let args: Vec<String> = env::args().collect();
 
     let catalogue_size:usize = args[1].parse::<usize>().unwrap();
     let alpha:f64 = args[2].parse::<f64>().unwrap();
     let cache_delta: f64 = args[3].parse::<f64>().unwrap();
-    let filter_delta: f64 = args[4].parse::<f64>().unwrap();
-    sixcn_sim(catalogue_size, alpha, (cache_delta*(catalogue_size as f64)) as usize, (filter_delta*(catalogue_size as f64)) as usize);
+    //let filter_delta: f64 = args[4].parse::<f64>().unwrap();
+
+    let cache_size = (catalogue_size as f64 * cache_delta) as usize;
+
+    for filter_delta_int in 1..10 {
+        let filter_size = catalogue_size * filter_delta_int / 100;
+        sixcn_sim(catalogue_size, alpha, cache_size, filter_size);
+    }
+    */
+    
+    run_sim()
 }

@@ -2,7 +2,7 @@ extern crate rand;
 
 use distribution::rand::Rng;
 
-use distribution::rand::distributions::{Exp, Sample};
+use distribution::rand::distributions::{Exp, Distribution};
 
 pub fn exponential_generator (lambda : f64) -> f64
 {
@@ -15,8 +15,8 @@ pub struct ConstantDistribution<T> where T: Copy{
     value: T
 }
 
-impl<T> Sample<T> for ConstantDistribution<T> where T: Copy {
-    fn sample<R: Rng> (&mut self, _: &mut R) -> T {
+impl<T> Distribution<T> for ConstantDistribution<T> where T: Copy {
+    fn sample<R: Rng + ?Sized> (&self, _: &mut R) -> T {
         self.value
     }
 }
@@ -39,8 +39,8 @@ impl OffsetExp {
     }
 }
 
-impl Sample<f64> for OffsetExp {
-    fn sample<R: Rng> (&mut self, r: &mut R) -> f64 {
+impl Distribution<f64> for OffsetExp {
+    fn sample<R: Rng + ?Sized> (&self, r: &mut R) -> f64 {
         self.offset + self.exp.sample(r)
     }
 }

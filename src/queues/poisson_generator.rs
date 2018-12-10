@@ -1,18 +1,18 @@
 extern crate rand;
 
 use self::rand::distributions::Exp;
-use self::rand::distributions::Sample;
+use self::rand::distributions::Distribution;
 use queues::request::Request;
 use queues::Queue;
 
-pub struct PoissonGenerator<T> where T: Sample<usize> {
+pub struct PoissonGenerator<T> where T: Distribution<usize> {
     next_exit: f64,
     next_request: Option<Request>,
     pop_distribution: T,
     iat_distribution: Exp
 }
 
-impl<T> Queue for PoissonGenerator<T> where T: Sample<usize> {
+impl<T> Queue for PoissonGenerator<T> where T: Distribution<usize> {
     fn arrival (&mut self, _req: Request) {
         panic!("You should not arrive at a generator");
     }
@@ -36,7 +36,7 @@ impl<T> Queue for PoissonGenerator<T> where T: Sample<usize> {
     }
 }
 
-impl<T> PoissonGenerator<T> where T: Sample<usize> {
+impl<T> PoissonGenerator<T> where T: Distribution<usize> {
     pub fn new (rate: f64, distribution: T) -> Self{
         let mut ret = PoissonGenerator {
             next_exit: 0.,

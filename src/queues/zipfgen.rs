@@ -1,12 +1,70 @@
 extern crate rand;
+extern crate zipf;
+
+use self::rand::distributions::Distribution;
+use self::zipf::ZipfDistribution;
+
+use std::vec::Vec;
+use std::mem;
 
 use queues::Queue;
 use queues::request::Request;
-use self::rand::distributions::Sample;
-use std::vec::Vec;
 use float_binaryheap::FloatBinaryHeap;
 
-pub struct ZipfGenerator<T> where T: Sample<f64> {
+pub struct ZipfGenerator<T> where T: Distribution<f64> {
+    pop_distribution: ZipfDistribution,
+    ita_distribution: T,
+    next_req: Request,
+    next_arrival: f64
+}
+
+impl<T> ZipfGenerator<T> where T: Distribution<f64> {
+    pub fn new (alpha: f64, catalogue_size: usize, distribution: T) -> Self {
+        let mut ret = ZipfGenerator {
+            pop_distribution: ZipfDistribution::new(catalogue_size, alpha).unwrap(),
+            ita_distribution: distribution,
+            next_req: Request::new(0),
+            next_arrival: 0.,
+        };
+        ret.draw_req();
+        ret.draw_arrival();
+
+        ret
+    }
+
+    fn draw_req (&mut self) -> Request {
+        let mut new_req = Request::new(self.pop_distribution.sample(&mut rand::thread_rng()));
+        mem::swap(&mut self.next_req, &mut new_req);
+        new_req
+    }
+
+    fn draw_arrival (&mut self) -> f64 {
+        let ret = self.next_arrival;
+        self.next_arrival += self.ita_distribution.sample(&mut rand::thread_rng());
+        ret
+    }
+
+}
+
+impl<T> Queue for ZipfGenerator<T> where T: Distribution<f64> {
+    fn arrival (&mut self, _req: Request) {
+        panic!("You should not arrive at a generator");
+    }
+
+    fn update_time (&mut self, _time: f64) {}
+
+    fn read_next_exit (&self) -> Option<(f64, &Request)> {
+        Some((self.next_arrival,&self.next_req))
+    }
+
+    fn pop_next_exit (&mut self) -> Option<(f64,Request)> {
+        let req = self.draw_req();
+        let arrival = self.draw_arrival();
+        Some((arrival, req))
+    }
+}
+
+pub struct ZipfGeneratorOld<T> where T: Distribution<f64> {
     alpha: f64,
     catalogue_size: usize,
     popularity: Vec<f64>,
@@ -14,10 +72,11 @@ pub struct ZipfGenerator<T> where T: Sample<f64> {
     iat_distribution: Vec<T>,
 } 
 
-impl<T> ZipfGenerator<T> where T: Sample<f64> {
+impl<T> ZipfGeneratorOld<T> where T: Distribution<f64> {
     pub fn new<F> (alpha: f64, catalogue_size: usize, iat_func: F) -> Self 
-        where F: Fn(f64)->T {
-        let mut ret = ZipfGenerator {
+        where F: Fn(f64)->T
+    {
+        let mut ret = ZipfGeneratorOld {
             alpha,
             catalogue_size,
             popularity: Vec::with_capacity(catalogue_size),
@@ -48,7 +107,7 @@ impl<T> ZipfGenerator<T> where T: Sample<f64> {
     }
 }
 
-impl<T> Queue for ZipfGenerator<T> where T: Sample<f64> {
+impl<T> Queue for ZipfGeneratorOld<T> where T: Distribution<f64> {
     fn arrival (&mut self, _req: Request) {
         panic!("You should not arrive at a generator");
     }

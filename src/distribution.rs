@@ -6,9 +6,7 @@ use distribution::rand::distributions::{Exp, Distribution};
 
 pub fn exponential_generator (lambda : f64) -> f64
 {
-    let mut exp = Exp::new(lambda);
-    let v = exp.sample(&mut rand::thread_rng());
-    v
+    Exp::new(lambda).sample(&mut rand::thread_rng())
 }
 
 pub struct ConstantDistribution<T> where T: Copy{

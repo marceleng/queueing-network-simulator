@@ -32,15 +32,13 @@ use caches::Cache;
 
 fn run_sim() {
 
-    let catalogue_size = 10000000;
+    let catalogue_size = 10_000_000;
     let alpha = 1.01;
 
     let x_comp = 1.;
     let s_raw = 1e6;
     let s_proc = 1e4;
-    let delta_app = 100. * 1e-3;
-
-    let percentile = 0.99;
+    //let delta_app = 100. * 1e-3;
 
     //let s_cachef_bytes = 1e9;
     let s_cachef_bytes = 1e5;
@@ -62,8 +60,8 @@ fn run_sim() {
     //let k_LFU = 6.1e5;
     //let k_lru = 1.3e6;
     let k_lru = 2.1e5;
-    let na = 149850;
-    let k1 = 387707;
+    let na = 149_850;
+    let k1 = 387_707;
 
     let s_cachef = s_cachef_bytes/s_proc;
 
@@ -72,7 +70,7 @@ fn run_sim() {
     //let mut filter = P2LruFilter::new(5*k_lru as usize, delta_app-tau_acc, percentile);
     //filter.set_optimize(true);
     //let filter = P2LruFilter::new(10, delta_app-tau_acc, percentile);
-    let mut filter = AgingBloomFilterFPGA::new(k1,0.01);
+    let filter = AgingBloomFilterFPGA::new(k1,0.01);
     //let mut filter: LruCache<usize> = LruCache::new(k_lru as usize);
     let filter_ptr = Rc::new(RefCell::new(filter));
     let fog_cache: LruCache<usize> = LruCache::new(s_cachef as usize);
@@ -152,8 +150,8 @@ fn run_sim() {
         core_d
     }));
 
-    let filter_ptr_1 = filter_ptr.clone();
-    qn.add_transition(core_d, Box::new(move |req| {
+    //let filter_ptr_1 = filter_ptr.clone();
+    qn.add_transition(core_d, Box::new(move |_req| {
         //filter_ptr_1.borrow_mut().update((req.get_id(), req.get_content()));
         //filter_ptr_1.borrow_mut().update(req.get_content());
         //println!("{}", filter_ptr_1.borrow());
@@ -164,7 +162,7 @@ fn run_sim() {
 
     //qn.add_queue(Box::new(P2LruFilterCont::new(filter_ptr)));
 
-    for _ in 0..400000000 {
+    for _ in 0..10_000 {
         qn.make_transition();
     }
     println!("Done");

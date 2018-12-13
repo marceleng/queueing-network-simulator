@@ -1,7 +1,6 @@
 extern crate lru_cache;
 
 use caches::Cache;
-use queues::Queue;
 
 use std::hash::Hash;
 use std::cmp::Eq;

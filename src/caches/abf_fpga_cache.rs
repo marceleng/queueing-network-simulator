@@ -16,7 +16,7 @@ impl AgingBloomFilterFPGA {
     pub fn new(k1: usize, miss_rate: f64) -> Self {
         let fa = 1. - (1. - miss_rate).sqrt();
         AgingBloomFilterFPGA {
-            k1: k1,
+            k1,
             arrival_cnt: 0,
             a1: Bloom::new_for_fp_rate(k1, fa),
             a2: Bloom::new_for_fp_rate(k1, fa),

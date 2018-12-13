@@ -31,7 +31,7 @@ impl<T> Queue for MG1PS<T> where T: Distribution<f64> {
     }
 
     fn update_time (&mut self, time: f64) {
-        if self.processes.len() > 0 {
+        if !self.processes.is_empty()  {
             let coef = self.work_rate / (self.processes.len() as f64);
             let work_update = (time - self.time) * coef;
             self.processes.translate_keys(-work_update);

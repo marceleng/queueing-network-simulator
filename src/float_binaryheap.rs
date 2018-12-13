@@ -46,6 +46,7 @@ impl<T> HeapEntry<T> where T: PartialEq {
     }
 }
 
+#[derive(Default)]
 pub struct FloatBinaryHeap<T> where T: PartialEq {
     heap: BinaryHeap<HeapEntry<T>>,
 }
@@ -86,11 +87,11 @@ impl<T> FloatBinaryHeap<T> where T: PartialEq {
     }
 
     pub fn translate_keys(&mut self, translation :f64) {
-        let items : Vec<HeapEntry<T>> = self.heap.drain().collect();
         let translation = match NotNaN::new(translation) {
             Ok(num) => num,
             Err(_) => panic!("Translation value is NaN")
         };
+        let items : Vec<HeapEntry<T>> = self.heap.drain().collect();
         for mut item in items {
             item.key += translation;
             self.heap.push(item)

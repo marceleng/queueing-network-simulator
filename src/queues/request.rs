@@ -4,7 +4,10 @@ type LogKey   = f64;
 type LogEntry = (usize, usize);
 
 #[derive(PartialEq,Clone,Debug)]
-pub struct Request {
+pub struct Request(Box<_Request>);
+
+#[derive(PartialEq,Clone,Debug)]
+struct _Request {
     id: usize,
     content: usize,
     log: Vec<(LogKey, LogEntry)>,
@@ -12,7 +15,31 @@ pub struct Request {
 
 impl Request {
     pub fn new (content: usize) -> Self {
-        let mut ret = Request {
+        Request { 0: Box::new(_Request::new(content)) }
+    }
+
+    pub fn get_content (&self) -> usize {
+        self.0.get_content()
+    }
+
+    pub fn get_id(&self) -> usize {
+        self.0.get_id()
+    }
+
+    pub fn add_log_entry(&mut self, key: LogKey, entry: LogEntry)
+    {
+        self.0.log.push((key, entry));
+    }
+
+    pub fn get_log(&self) -> Vec<(LogKey, LogEntry)>
+    {
+        self.0.log.clone()
+    }
+}
+
+impl _Request {
+    pub fn new (content: usize) -> Self {
+        let mut ret = _Request {
             id: 0,
             content,
             log : Vec::new()

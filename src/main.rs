@@ -162,7 +162,7 @@ fn run_sim() {
 
     //qn.add_queue(Box::new(P2LruFilterCont::new(filter_ptr)));
 
-    for _ in 0..10_000 {
+    for _ in 0..1_000 {
         qn.make_transition();
     }
     println!("Done");

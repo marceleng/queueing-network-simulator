@@ -6,7 +6,6 @@ pub mod zipfgen;
 pub mod queueing_network;
 pub mod file_logger;
 pub mod passthrough;
-pub mod pit;
 
 use self::request::Request;
 

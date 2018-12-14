@@ -32,8 +32,14 @@ impl<T> Queue for MG1PS<T> where T: Distribution<f64> {
     fn arrival (&mut self, req: Request) {
         let work = self.distribution.sample(&mut rand::thread_rng());
         let mut idx = self.processes.len()-1;
-        while idx <= 0 && self.processes[idx].work > work {
+        while idx > 0 && self.processes[idx].work > work {
             idx -= 1;
+        }
+        if idx == 0 {
+            idx = match self.processes.front() {
+                None => 0,
+                Some(p) => (work > p.work) as usize
+            }
         }
         self.processes.insert(idx+1, Process { req, work });
     }

@@ -31,17 +31,11 @@ impl<T> MG1PS<T> where T: Distribution<f64> {
 impl<T> Queue for MG1PS<T> where T: Distribution<f64> {
     fn arrival (&mut self, req: Request) {
         let work = self.distribution.sample(&mut rand::thread_rng());
-        let mut idx = self.processes.len()-1;
-        while idx > 0 && self.processes[idx].work > work {
-            idx -= 1;
+        let mut idx = 0;
+        while idx < self.processes.len() && self.processes[idx].work > work {
+                idx += 1;
         }
-        if idx == 0 {
-            idx = match self.processes.front() {
-                None => 0,
-                Some(p) => (work > p.work) as usize
-            }
-        }
-        self.processes.insert(idx+1, Process { req, work });
+        self.processes.insert(idx, Process { req, work });
     }
 
     fn update_time (&mut self, time: f64) {
@@ -54,11 +48,11 @@ impl<T> Queue for MG1PS<T> where T: Distribution<f64> {
     }
 
     fn read_next_exit(&self) -> Option<(f64, &Request)> {
-        self.processes.front().map(|p| (self.time + p.work*(self.processes.len() as f64)/self.work_rate, &p.req))
+        self.processes.back().map(|p| (self.time + p.work*(self.processes.len() as f64)/self.work_rate, &p.req))
     }
 
     fn pop_next_exit  (&mut self) -> Option<(f64,Request)> {
-        self.processes.pop_front().map(|p| (self.time + p.work*(self.processes.len() as f64)/self.work_rate, p.req))
+        self.processes.pop_back().map(|p| (self.time + p.work*(self.processes.len() as f64)/self.work_rate, p.req))
     }
 }
 

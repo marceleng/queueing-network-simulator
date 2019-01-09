@@ -1,14 +1,9 @@
 use std::collections::VecDeque;
 use queues::request::Request;
-use queues::Queue;
+use queues::{Queue,Process};
 use float_binaryheap::FloatBinaryHeap;
 
 use rand::distributions::Distribution;
-
-struct Process {
-    req: Request,
-    work: f64
-}
 
 pub struct MG1PS<T> where T: Distribution<f64> {
     time: f64,

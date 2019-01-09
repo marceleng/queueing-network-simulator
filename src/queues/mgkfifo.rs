@@ -1,11 +1,11 @@
 use float_binaryheap::FloatBinaryHeap;
-use rand::distributions::Distribution;
+use distribution::MutDistribution;
 use std::collections::VecDeque;
 use queues::request::Request;
 
 use queues::{Queue,Process};
 
-pub struct MGKFIFO<T> where T: Distribution<f64> {
+pub struct MGKFIFO<T> where T: MutDistribution<f64> {
     time: f64,
     work_rate: f64,
     queue: VecDeque<Process>,
@@ -15,7 +15,7 @@ pub struct MGKFIFO<T> where T: Distribution<f64> {
     distribution: T,
 }
 
-impl<T> MGKFIFO<T> where T: Distribution<f64> {
+impl<T> MGKFIFO<T> where T: MutDistribution<f64> {
     pub fn new(k: usize, work_rate: f64, distribution: T) -> Self {
         MGKFIFO {
             time: 0.,
@@ -52,12 +52,12 @@ impl<T> MGKFIFO<T> where T: Distribution<f64> {
 }
 
 
-impl<T> Queue for MGKFIFO<T> where T: Distribution<f64> {
+impl<T> Queue for MGKFIFO<T> where T: MutDistribution<f64> {
     fn arrival (&mut self, req: Request) {
 
         let process = Process {
             req,
-            work: self.distribution.sample(&mut rand::thread_rng())
+            work: self.distribution.mut_sample(&mut rand::thread_rng())
         };
 
         if let Some(server) = self.free_servers.pop() {

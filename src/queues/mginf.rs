@@ -1,19 +1,17 @@
-extern crate rand;
-
 use queues::request::Request;
 use queues::Queue;
 use float_binaryheap::FloatBinaryHeap;
 
-use self::rand::distributions::Distribution;
+use distribution::MutDistribution;
 
-pub struct MGINF<T> where T: Distribution<f64> {
+pub struct MGINF<T> where T: MutDistribution<f64> {
     time: f64,
     work_rate: f64,
     processes: FloatBinaryHeap<Request>,
     distribution: T,
 }
 
-impl<T> MGINF<T> where T: Distribution<f64> {
+impl<T> MGINF<T> where T: MutDistribution<f64> {
     pub fn new (work_rate: f64, distribution: T) -> MGINF<T> {
         MGINF {
             time: 0.,
@@ -24,9 +22,9 @@ impl<T> MGINF<T> where T: Distribution<f64> {
     }
 }
 
-impl<T> Queue for MGINF<T> where T: Distribution<f64> {
+impl<T> Queue for MGINF<T> where T: MutDistribution<f64> {
     fn arrival (&mut self, req: Request) {
-        let exit = self.distribution.sample(&mut rand::thread_rng()) / self.work_rate + self.time;
+        let exit = self.distribution.mut_sample(&mut rand::thread_rng()) / self.work_rate + self.time;
         self.processes.push(exit, req)
     }
 

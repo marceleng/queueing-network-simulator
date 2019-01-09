@@ -3,16 +3,16 @@ use queues::request::Request;
 use queues::{Queue,Process};
 use float_binaryheap::FloatBinaryHeap;
 
-use rand::distributions::Distribution;
+use distribution::MutDistribution;
 
-pub struct MG1PS<T> where T: Distribution<f64> {
+pub struct MG1PS<T> where T: MutDistribution<f64> {
     time: f64,
     work_rate: f64,
     processes: VecDeque<Process>,
     distribution: T,
 }
 
-impl<T> MG1PS<T> where T: Distribution<f64> {
+impl<T> MG1PS<T> where T: MutDistribution<f64> {
     pub fn new (work_rate: f64, distribution: T) -> MG1PS<T> {
         MG1PS{
             time: 0.,
@@ -23,9 +23,9 @@ impl<T> MG1PS<T> where T: Distribution<f64> {
     }
 }
 
-impl<T> Queue for MG1PS<T> where T: Distribution<f64> {
+impl<T> Queue for MG1PS<T> where T: MutDistribution<f64> {
     fn arrival (&mut self, req: Request) {
-        let work = self.distribution.sample(&mut rand::thread_rng());
+        let work = self.distribution.mut_sample(&mut rand::thread_rng());
         let mut idx = 0;
         while idx < self.processes.len() && self.processes[idx].work > work {
                 idx += 1;
@@ -52,14 +52,14 @@ impl<T> Queue for MG1PS<T> where T: Distribution<f64> {
 }
 
 
-pub struct Mg1psOld<T> where T: Distribution<f64> {
+pub struct Mg1psOld<T> where T: MutDistribution<f64> {
     time: f64,
     work_rate: f64,
     processes: FloatBinaryHeap<Request>,
     distribution: T,
 }
 
-impl<T> Mg1psOld<T> where T: Distribution<f64> {
+impl<T> Mg1psOld<T> where T: MutDistribution<f64> {
     pub fn new (work_rate: f64, distribution: T) -> Mg1psOld<T> {
         Mg1psOld {
             time: 0.,
@@ -70,9 +70,9 @@ impl<T> Mg1psOld<T> where T: Distribution<f64> {
     }
 }
 
-impl<T> Queue for Mg1psOld<T> where T: Distribution<f64> {
+impl<T> Queue for Mg1psOld<T> where T: MutDistribution<f64> {
     fn arrival (&mut self, req: Request) {
-        let work = self.distribution.sample(&mut rand::thread_rng());
+        let work = self.distribution.mut_sample(&mut rand::thread_rng());
         self.processes.push(work, req)
     }
 

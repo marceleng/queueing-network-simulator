@@ -42,7 +42,7 @@ impl<T> Queue for MG1PS<T> where T: MutDistribution<f64> {
     fn arrival (&mut self, req: Request) {
         self.apply_backlogged_time();
         let work = self.distribution.mut_sample(&mut rand::thread_rng());
-        let mut idx = 0;
+        let mut idx = self.processes.len() /2;
         while idx < self.processes.len() && self.processes[idx].work > work {
                 idx += 1;
         }
@@ -55,7 +55,7 @@ impl<T> Queue for MG1PS<T> where T: MutDistribution<f64> {
     }
 
     fn read_next_exit(&self) -> Option<(f64, &Request)> {
-        self.processes.back().map(|p| (self.time + p.work*(self.processes.len() as f64)/self.work_rate, &p.req))
+        self.processes.back().map(|p| (self.time - self.backlogged_time + p.work*(self.processes.len() as f64)/self.work_rate, &p.req))
     }
 
     fn pop_next_exit  (&mut self) -> Option<(f64,Request)> {

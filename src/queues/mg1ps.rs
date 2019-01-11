@@ -10,6 +10,7 @@ pub struct MG1PS<T> where T: MutDistribution<f64> {
     time: f64,
     work_rate: f64,
     processes: VecDeque<Process>,
+    backlogged_time: f64,
     distribution: T,
 }
 
@@ -19,13 +20,27 @@ impl<T> MG1PS<T> where T: MutDistribution<f64> {
             time: 0.,
             work_rate,
             processes: VecDeque::new(),
+            backlogged_time: 0.,
             distribution
         }
+    }
+
+    fn apply_backlogged_time (&mut self) {
+        let work_update = self.backlogged_time *self.work_rate / (self.processes.len() as f64);
+        /*
+        for process in self.processes.iter_mut() {
+            (*process).work -= work_update;
+        }*/
+        for process in &mut self.processes {
+            process.work -= work_update;
+        }
+        self.backlogged_time = 0.;
     }
 }
 
 impl<T> Queue for MG1PS<T> where T: MutDistribution<f64> {
     fn arrival (&mut self, req: Request) {
+        self.apply_backlogged_time();
         let work = self.distribution.mut_sample(&mut rand::thread_rng());
         let mut idx = 0;
         while idx < self.processes.len() && self.processes[idx].work > work {
@@ -35,11 +50,7 @@ impl<T> Queue for MG1PS<T> where T: MutDistribution<f64> {
     }
 
     fn update_time (&mut self, time: f64) {
-        let coef = self.work_rate / (self.processes.len() as f64);
-        let work_update = (time - self.time) * coef;
-        for process in self.processes.iter_mut() {
-            (*process).work -= work_update;
-        }
+        self.backlogged_time += time - self.time;
         self.time = time
     }
 
@@ -48,6 +59,7 @@ impl<T> Queue for MG1PS<T> where T: MutDistribution<f64> {
     }
 
     fn pop_next_exit  (&mut self) -> Option<(f64,Request)> {
+        self.apply_backlogged_time();
         let nb_processes = self.processes.len() as f64;
         self.processes.pop_back().map(|p| (self.time + p.work*nb_processes/self.work_rate, p.req))
     }

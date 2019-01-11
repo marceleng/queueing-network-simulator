@@ -61,7 +61,7 @@ fn run_sim() {
         let potential_dest = pservers[i];
         let fallback_dest = if i < (n_servers-1) { pnetwork_arcs[i+1] } else { potential_dest };
         qn.add_transition(source, Box::new(move |ref _req, ref qn| { 
-            let load = qn.read_queue(potential_dest).read_load();
+            let load = qn.get_queue(potential_dest).read_load();
             println!("load={}", load);
             if load == 0 {
                 potential_dest
@@ -72,9 +72,8 @@ fn run_sim() {
     }
 
     // Transitions server(i) -> file logger
-    for i in 0..n_servers {
-        let source = pservers[i];
-        qn.add_transition(source, Box::new(move |_, _| file_logger ));
+    for source in &pservers {
+        qn.add_transition(*source, Box::new(move |_, _| file_logger ));
     }
 
 

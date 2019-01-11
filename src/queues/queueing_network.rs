@@ -36,14 +36,14 @@ impl QNet {
         self.transitions[queue] = Some(trans);
     }
 
-    pub fn get_queue(&mut self, queue: usize) -> &mut Box<Queue>
+    pub fn get_queue_mut(&mut self, queue: usize) -> &mut Queue
     {
-        &mut self.queues[queue]
+        &mut *(self.queues[queue])
     }
 
-    pub fn read_queue(&self, queue: usize) -> &Box<Queue>
+    pub fn get_queue(&self, queue: usize) -> &Queue
     {
-        &self.queues[queue]
+        & (*self.queues[queue])
     }    
 
     pub fn make_transition (&mut self)

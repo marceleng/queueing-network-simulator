@@ -1,14 +1,14 @@
 extern crate ordered_float;
 extern crate num_traits;
 
-use self::ordered_float::NotNaN;
+use self::ordered_float::{NotNan,FloatIsNan};
 use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use self::num_traits::cast::ToPrimitive;
 
 #[derive(PartialEq)]
 struct HeapEntry<T> where T: PartialEq {
-    pub key: NotNaN<f64>,
+    pub key: NotNan<f64>,
     pub value: T
 }
 
@@ -27,16 +27,16 @@ impl<T> Ord for HeapEntry<T> where T: PartialEq {
 }
 
 impl<T> HeapEntry<T> where T: PartialEq {
-    pub fn into_tuple(&self) -> (f64, &T) {
+    pub fn to_tuple(&self) -> (f64, &T) {
         (self.key.to_f64().unwrap(), &self.value)
     }
 
     pub fn from_tuple (key : f64, value : T) -> Self {
-        let key = NotNaN::new(key);
+        let key = NotNan::new(key);
         let key = match key {
             Ok(num) => num,
-            Err(_) => {
-                panic!("Float is NaN in Heap")
+            Err(FloatIsNan) => {
+                panic!("Float is Nan in Heap")
             }
         };
         HeapEntry {
@@ -65,7 +65,7 @@ impl<T> FloatBinaryHeap<T> where T: PartialEq {
     pub fn peek(&self) -> Option<(f64, &T)> {
         match self.heap.peek() {
             None => None,
-            Some(r) => Some(r.into_tuple())
+            Some(r) => Some(r.to_tuple())
         }
     }
 
@@ -87,9 +87,9 @@ impl<T> FloatBinaryHeap<T> where T: PartialEq {
     }
 
     pub fn translate_keys(&mut self, translation :f64) {
-        let translation = match NotNaN::new(translation) {
+        let translation = match NotNan::new(translation) {
             Ok(num) => num,
-            Err(_) => panic!("Translation value is NaN")
+            Err(FloatIsNan) => panic!("Translation value is Nan")
         };
         let items : Vec<HeapEntry<T>> = self.heap.drain().collect();
         for mut item in items {

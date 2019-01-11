@@ -28,4 +28,8 @@ impl Queue for PassthroughQueue {
     {
         self.requests.pop_front().map(|r| (self.time, r))
     }
+
+    fn read_load (&self) -> usize {
+        self.requests.len()
+    }    
 }

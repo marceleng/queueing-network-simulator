@@ -52,6 +52,10 @@ impl Queue for FileLogger {
     fn read_next_exit(&self) -> Option<(f64, &Request)> {None}
 
     fn pop_next_exit(&mut self) -> Option<(f64,Request)> {None}
+
+    fn read_load (&self) -> usize {
+        self.buffer.len()
+    }
 }
 
 impl Drop for FileLogger {

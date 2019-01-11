@@ -34,6 +34,10 @@ impl<T> Queue for PoissonGenerator<T> where T: Distribution<usize> {
             Some(r) => Some((ret.0,r))
         }
     }
+
+    fn read_load (&self) -> usize {
+        1
+    }    
 }
 
 impl<T> PoissonGenerator<T> where T: Distribution<usize> {

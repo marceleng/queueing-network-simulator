@@ -3,7 +3,7 @@ use queues::request::Request;
 use std::vec::Vec;
 use std::f64::INFINITY;
 
-type Transition = Box<Fn(&Request)->usize>;
+type Transition = Box<Fn(&Request, &QNet)->usize>;
 
 pub struct QNet {
     number_of_queues: usize,
@@ -41,6 +41,11 @@ impl QNet {
         &mut self.queues[queue]
     }
 
+    pub fn read_queue(&self, queue: usize) -> &Box<Queue>
+    {
+        &self.queues[queue]
+    }    
+
     pub fn make_transition (&mut self)
     {
         let mut orig_q = self.number_of_queues;
@@ -65,8 +70,9 @@ impl QNet {
                 match self.transitions[orig_q] {
                     None => println!("{} exits at t={}", r.get_id(), t),
                     Some(ref f) => { 
-                        let dest_q = f(&r);
+                        let dest_q = f(&r, &self);
                         r.add_log_entry(t, (orig_q, dest_q));
+                        println!("Transition: {}->{}", orig_q, dest_q);
                         self.queues[dest_q].arrival(r)
                     }
                 }

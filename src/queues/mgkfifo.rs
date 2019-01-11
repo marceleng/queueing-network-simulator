@@ -90,4 +90,8 @@ impl<T> Queue for MGKFIFO<T> where T: MutDistribution<f64> {
             None => None
         }
     }
+
+    fn read_load (&self) -> usize {
+        self.queue.len()
+    }    
 }

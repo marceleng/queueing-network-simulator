@@ -43,7 +43,6 @@ impl<T> ZipfGenerator<T> where T: MutDistribution<f64> {
         self.next_arrival += self.ita_distribution.mut_sample(&mut rand::thread_rng());
         ret
     }
-
 }
 
 impl<T> Queue for ZipfGenerator<T> where T: MutDistribution<f64> {
@@ -62,6 +61,10 @@ impl<T> Queue for ZipfGenerator<T> where T: MutDistribution<f64> {
         let arrival = self.draw_arrival();
         Some((arrival, req))
     }
+
+    fn read_load (&self) -> usize {
+        1
+    }        
 }
 
 pub struct ZipfGeneratorOld<T> where T: MutDistribution<f64> {
@@ -126,4 +129,8 @@ impl<T> Queue for ZipfGeneratorOld<T> where T: MutDistribution<f64> {
         };
         ret
     }
+
+    fn read_load (&self) -> usize {
+        1
+    }    
 }

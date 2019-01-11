@@ -39,4 +39,8 @@ impl<T> Queue for MGINF<T> where T: MutDistribution<f64> {
     fn pop_next_exit  (&mut self) -> Option<(f64,Request)> {
         self.processes.pop()
     }
+
+    fn read_load (&self) -> usize {
+        self.processes.len()
+    }    
 }

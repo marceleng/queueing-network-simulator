@@ -50,6 +50,10 @@ impl<T> Queue for MG1PS<T> where T: MutDistribution<f64> {
     fn pop_next_exit  (&mut self) -> Option<(f64,Request)> {
         self.processes.pop_back().map(|p| (self.time + p.work*(self.processes.len() as f64)/self.work_rate, p.req))
     }
+
+    fn read_load (&self) -> usize {
+        self.processes.len()
+    }
 }
 
 
@@ -93,4 +97,8 @@ impl<T> Queue for Mg1psOld<T> where T: MutDistribution<f64> {
     fn pop_next_exit  (&mut self) -> Option<(f64,Request)> {
         self.processes.pop().map(|(w,r)| (self.time + w*(self.processes.len() as f64)/self.work_rate, r))
     }
+
+    fn read_load (&self) -> usize {
+        self.processes.len()
+    }    
 }

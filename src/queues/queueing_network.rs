@@ -6,10 +6,10 @@ use std::f64::INFINITY;
 type Transition = Box<Fn(&Request, &QNet)->usize>;
 
 pub struct QNet {
-    number_of_queues: usize,
-    queues: Vec<Box<Queue>>,
-    transitions: Vec<Option<Transition>>,
-    time: f64
+    pub number_of_queues: usize,
+    pub queues: Vec<Box<Queue>>,
+    pub transitions: Vec<Option<Transition>>,
+    pub time: f64
 }
 
 impl QNet {
@@ -72,7 +72,7 @@ impl QNet {
                     Some(ref f) => { 
                         let dest_q = f(&r, &self);
                         r.add_log_entry(t, (orig_q, dest_q));
-                        println!("Transition: {}->{}", orig_q, dest_q);
+                        //println!("Transition: {}->{}", orig_q, dest_q);
                         self.queues[dest_q].arrival(r)
                     }
                 }

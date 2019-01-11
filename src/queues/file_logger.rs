@@ -31,7 +31,8 @@ impl FileLogger {
                 format!("{}:{}:{}", key, orig, dest)
             }).collect();
             let log_str: String = log_str.join(";");
-            format!("{},{},{}", req.get_id(), req.get_content(), log_str)
+            let total_time = req.get_log().last().unwrap().0 - req.get_log().first().unwrap().0;
+            format!("{},{},{},{}", req.get_id(), req.get_content(), log_str, total_time)
         }).collect();
         self.file.write_all(s.join("\n").as_bytes())
     }

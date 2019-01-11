@@ -5,6 +5,7 @@ use float_binaryheap::FloatBinaryHeap;
 
 use distribution::MutDistribution;
 
+#[derive(Clone)]
 pub struct MG1PS<T> where T: MutDistribution<f64> {
     time: f64,
     work_rate: f64,

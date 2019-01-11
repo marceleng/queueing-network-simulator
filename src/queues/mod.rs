@@ -4,6 +4,7 @@ pub mod mginf;
 pub mod mgkfifo;
 pub mod poisson_generator;
 pub mod zipfgen;
+pub mod generator;
 pub mod queueing_network;
 pub mod file_logger;
 pub mod passthrough;

@@ -50,4 +50,8 @@ impl<T> Queue for Generator<T> where T: MutDistribution<f64> {
         self.draw_arrival();
         Some((arrival, req))
     }
+
+    fn read_load (&self) -> usize {
+        1
+    }    
 }

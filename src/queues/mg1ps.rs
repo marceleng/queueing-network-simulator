@@ -42,11 +42,25 @@ impl<T> Queue for MG1PS<T> where T: MutDistribution<f64> {
     fn arrival (&mut self, req: Request) {
         self.apply_backlogged_time();
         let work = self.distribution.mut_sample(&mut rand::thread_rng());
-        let mut idx = self.processes.len() /2;
+        let mut start = 0;
+        let mut end = self.processes.len();
+
+        while start < end {
+            let new_bound = (start + end) / 2;
+            if work > self.processes[new_bound].work {
+                end = new_bound;
+            }
+            else {
+                start = new_bound+1;
+            }
+        }
+        /*
+        let mut idx = 0;
         while idx < self.processes.len() && self.processes[idx].work > work {
                 idx += 1;
         }
-        self.processes.insert(idx, Process { req, work });
+        */
+        self.processes.insert(end, Process { req, work });
     }
 
     fn update_time (&mut self, time: f64) {

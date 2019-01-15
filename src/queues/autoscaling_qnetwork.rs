@@ -71,17 +71,8 @@ impl AutoscalingQNet {
         }
     }
 
-
-
-    pub fn add_server<T1: 'static+ MutDistribution<f64>,T2: 'static+ MutDistribution<f64>>(&mut self, link_distribution: T1, server_distribution: T2)
+    fn update_network(&mut self) 
     {
-        self.n_servers += 1;
-
-        // Link { server n-1 [or src] } -> server n
-        self.pnetwork_arcs.push(self.qn.add_queue(Box::new(MGINF::new(1., link_distribution))));
-        // Server n
-        self.pservers.push(self.qn.add_queue(Box::new(MG1PS::new(1., server_distribution))));
-        
         let last_server_idx = self.n_servers - 1;
 
         // Transition link({ server n-2 or src }, server n-1) -> { server(n-1) or link(server n-1, server n) }
@@ -99,7 +90,9 @@ impl AutoscalingQNet {
             let dest = self.pservers[0];
             self.qn.add_transition(self.ptraffic_source,  Box::new(move |_,_| dest ));
         } else {
-            panic!("n_servers == 0 after adding server!");
+            // If there are no servers, sink the traffic source to /dev/null
+            let dest = self.pfile_logger;                       
+            self.qn.add_transition(self.ptraffic_source,  Box::new(move |_,_| dest ));
         }
 
         // Transition link(server n-1, server n) -> { server n }
@@ -114,6 +107,45 @@ impl AutoscalingQNet {
             let source = self.pservers[last_server_idx];
             let dest = self.pfile_logger;           
             self.qn.add_transition(source, Box::new(move |_,_| dest ));
-        }        
-    }    
+        }             
+    }
+
+    pub fn add_server<T1: 'static+ MutDistribution<f64>,T2: 'static+ MutDistribution<f64>>(&mut self, link_distribution: T1, server_distribution: T2)
+    {
+        if self.pservers.len() != self.pnetwork_arcs.len() {
+            panic!("|pserver| != |pnetwork_arcs| while adding server!");
+        }
+
+        self.n_servers += 1;
+
+        if self.pservers.len() < self.n_servers {
+            /* Add new slot in vector if not existing */            
+            // Link { server n-1 [or src] } -> server n
+            self.pnetwork_arcs.push(self.qn.add_queue(Box::new(MGINF::new(1., link_distribution))));
+            // Server n
+            self.pservers.push(self.qn.add_queue(Box::new(MG1PS::new(1., server_distribution))));
+
+            if self.pservers.len() != self.n_servers {
+                panic!("|pserver| != n_servers after adding server!");
+            }            
+        } else {
+            /* Reuse slot in vector if already existing */
+            // Link { server n-1 [or src] } -> server n           
+            self.pnetwork_arcs[self.n_servers - 1] = self.qn.add_queue(Box::new(MGINF::new(1., link_distribution)));
+            // Server n            
+            self.pservers[self.n_servers - 1] = self.qn.add_queue(Box::new(MG1PS::new(1., server_distribution)));
+        }
+
+        self.update_network();   
+    }
+
+    pub fn remove_server(&mut self) {
+        // We don't actually perform removal of the queues, so that they can flush naturally
+        // However, we update the network so that no transition points to those queues
+
+        if self.n_servers > 0 {
+            self.n_servers -= 1;
+            self.update_network();
+        }
+    } 
 }

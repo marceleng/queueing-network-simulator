@@ -18,8 +18,6 @@ use queues::poisson_generator::PoissonGenerator;
 use rand::distributions::{Exp};
 use distribution::{ConstantDistribution};
 
-use queues::mg1ps::MG1PS;
-use queues::mginf::MGINF;
 use queues::autoscaling_qnetwork::AutoscalingQNet;
 use queues::file_logger::FileLogger;
 
@@ -33,11 +31,14 @@ fn run_sim(rho: f64) {
     let tau_network = 0.000_200; //200 μs
 
 
-    let mut qn = AutoscalingQNet::new(Box::new(PoissonGenerator::new(lambda, ConstantDistribution::new(1))), Box::new(FileLogger::new(1024, &format!("results_{:.2}.csv", rho))));
+    let mut qn = AutoscalingQNet::new(Box::new(PoissonGenerator::new(lambda, ConstantDistribution::new(1))), 
+                                      Box::new(FileLogger::new(1024, &format!("results/results_{:.2}.csv", rho))));
 
-    for i in 0..n_servers {
+    for _i in 0..n_servers {
         qn.add_server(ConstantDistribution::new(tau_network), Exp::new(mu));
     }
+    qn.add_server(ConstantDistribution::new(tau_network), Exp::new(mu));
+    qn.remove_server();
 
     // Run simulation
     for _ in 0..500_000 {

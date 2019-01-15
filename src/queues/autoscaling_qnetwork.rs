@@ -8,6 +8,47 @@ use queues::mginf::MGINF;
 use distribution::MutDistribution;
 
 
+enum ScalingOperation {
+    NOOP,
+    DOWNSCALING,
+    UPSCALING
+}
+struct AutoscalingTracker {
+    last_event_time: f64,
+    num_events: usize,
+    proba_empty_ewma: f64,
+    ewma_window_len: f64
+}
+
+impl AutoscalingTracker {
+    fn new(_ewma_window_len: f64) -> Self {
+        AutoscalingTracker {
+            last_event_time: 0.,
+            num_events: 0,
+            proba_empty_ewma: 0.,
+            ewma_window_len: _ewma_window_len
+        }
+    }
+
+    // returns true iff autoscaling needed
+    fn update(&mut self, time: f64, load: usize) -> ScalingOperation
+    {
+        let alpha = 1. - (-(time - self.last_event_time) / self.ewma_window_len).exp();
+        let incr = if load == 0 { 1. } else { 0. };
+        self.proba_empty_ewma = (1. - alpha) * self.proba_empty_ewma + alpha * incr;
+        self.last_event_time = time;
+        self.num_events += 1;
+        if self.proba_empty_ewma > 0.6 && self.num_events >= 50 { 
+            ScalingOperation::DOWNSCALING 
+        } else if self.proba_empty_ewma < 0.4 && self.num_events >= 50 { 
+            ScalingOperation::UPSCALING 
+        } else { 
+            ScalingOperation::NOOP 
+        }
+    }
+}
+
+
 type Transition = Box<Fn(&Request, &QNet)->usize>;
 
 pub struct AutoscalingQNet {
@@ -18,8 +59,6 @@ pub struct AutoscalingQNet {
     pservers: Vec<usize>,
     pnetwork_arcs: Vec<usize>
 }
-
-
 
 impl AutoscalingQNet {    
     pub fn new (traffic_source: Box<Queue>, file_logger: Box<Queue>) -> Self {

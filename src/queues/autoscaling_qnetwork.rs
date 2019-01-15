@@ -131,9 +131,9 @@ impl AutoscalingQNet {
         } else {
             /* Reuse slot in vector if already existing */
             // Link { server n-1 [or src] } -> server n           
-            self.pnetwork_arcs[self.n_servers - 1] = self.qn.add_queue(Box::new(MGINF::new(1., link_distribution)));
+            self.pnetwork_arcs[self.n_servers - 1] = self.qn.change_queue(self.pnetwork_arcs[self.n_servers - 1], Box::new(MGINF::new(1., link_distribution)));
             // Server n            
-            self.pservers[self.n_servers - 1] = self.qn.add_queue(Box::new(MG1PS::new(1., server_distribution)));
+            self.pservers[self.n_servers - 1] = self.qn.change_queue(self.pservers[self.n_servers - 1], Box::new(MG1PS::new(1., server_distribution)));
         }
 
         self.update_network();   

@@ -46,6 +46,12 @@ impl QNet {
         & (*self.queues[queue])
     }    
 
+    pub fn change_queue(&mut self, queue: usize, q: Box<Queue>) -> usize
+    {
+        self.queues[queue] = q;
+        queue
+    } 
+
     pub fn make_transition (&mut self)
     {
         let mut orig_q = self.number_of_queues;

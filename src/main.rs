@@ -24,7 +24,7 @@ use queues::file_logger::FileLogger;
 
 fn run_sim(rho: f64) {
 
-    let n_servers = 5;
+    let n_servers = 17;
 
     let mu = 1./0.100; //100 ms
     let lambda = rho * mu;
@@ -37,11 +37,11 @@ fn run_sim(rho: f64) {
     for _i in 0..n_servers {
         qn.add_server(ConstantDistribution::new(tau_network), Exp::new(mu));
     }
-    qn.add_server(ConstantDistribution::new(tau_network), Exp::new(mu));
-    qn.remove_server();
+    //qn.add_server(ConstantDistribution::new(tau_network), Exp::new(mu));
+    //qn.remove_server();
 
     // Run simulation
-    for _ in 0..500_000 {
+    for _ in 0..10_000_000 {
         qn.make_transition();
     }
     println!("Done");
@@ -51,8 +51,8 @@ fn run_sim(rho: f64) {
 
 
 fn main () {   
-    let mut rho = 0.1;
-    while rho <= 4.0 {
+    let mut rho = 14.0;
+    while rho <= 14.0 {
         run_sim(rho);
         rho += 0.1;
     }

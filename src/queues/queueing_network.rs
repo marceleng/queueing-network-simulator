@@ -67,12 +67,10 @@ impl QNet {
 
 
         if orig_q < self.number_of_queues {
+            self.queues.iter_mut().for_each(|x| x.update_time(next_exit));
+
             if let Some((t,mut r)) = self.queues[orig_q].pop_next_exit() {
                 self.time = t;
-                //TODO: figure out how to use iterator instead
-                for queue in 0..self.number_of_queues {
-                    self.queues[queue].update_time(t)
-                }
                 match self.transitions[orig_q] {
                     None => println!("{} exits at t={}", r.get_id(), t),
                     Some(ref f) => { 

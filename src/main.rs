@@ -19,6 +19,8 @@ use rand::distributions::{Exp};
 use distribution::{ConstantDistribution};
 
 use queues::autoscaling_qnetwork::AutoscalingQNet;
+use queues::queueing_network::QNet;
+use queues::mg1ps::MG1PS;
 use queues::file_logger::FileLogger;
 
 
@@ -51,9 +53,15 @@ fn run_sim(rho: f64) {
 
 
 fn main () {   
-    let mut rho = 0.1;
-    while rho <= 4.0 {
-        run_sim(rho);
-        rho += 0.1;
+    let mut qn = QNet::new();
+    let source =  qn.add_queue(Box::new(PoissonGenerator::new(1.0, ConstantDistribution::new(1))));
+    let proc = qn.add_queue(Box::new(MG1PS::new(1.1, Exp::new(1.0))));
+    let sink = qn.add_queue(Box::new(FileLogger::new(1024, "test.csv")));
+
+    qn.add_transition(source, Box::new(move |_,_| proc));
+    qn.add_transition(proc, Box::new(move |_,_| sink));
+
+    for _ in 0..500_000_000 {
+        qn.make_transition();
     }
 }

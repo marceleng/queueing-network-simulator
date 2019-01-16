@@ -33,7 +33,10 @@ impl<T> Queue for MG1PS<T> where T: MutDistribution<f64> {
     }
 
     fn update_time (&mut self, time: f64) {
-        self.applied_work += (time-self.time) * self.work_rate / (self.processes.len() as f64);
+        if !self.processes.is_empty() {
+            self.applied_work += (time-self.time) * self.work_rate / (self.processes.len() as f64);
+        }
+
         self.time = time
     }
 

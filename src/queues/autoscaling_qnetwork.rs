@@ -34,7 +34,29 @@ impl AutoscalingTracker {
         }
     }
 
-    // returns true iff autoscaling needed
+    fn fact(n: usize) -> usize 
+    {
+        if n == 0 || n == 1 { 1 } else { n * Self::fact(n-1) }
+    }
+
+    fn downscale_threshold(pe: f64, n: usize) -> f64 
+    {
+        let nm1 = n - 1;
+        let mut conv = roots::SimpleConvergency { eps:1e-15f64, max_iter:1000 };
+        let rho = roots::find_root_brent(0., (2*n) as f64, |x| { let denom: f64 = (0..nm1).map(|k| { x.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (x.powf(nm1 as f64) / (Self::fact(nm1-1) as f64)) / denom - (1. - pe)}, &mut conv).unwrap();
+        let pen = roots::find_root_brent(0., 1., |x| { let denom: f64 = (0..n).map(|k| { rho.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (rho.powf(n as f64) / (Self::fact(n-1) as f64)) / denom - (1. - x)}, &mut conv).unwrap();
+        pen
+    }
+
+    fn upscale_threshold(pe: f64, n: usize) -> f64 
+    {
+        let np1 = n + 1;
+        let mut conv = roots::SimpleConvergency { eps:1e-15f64, max_iter:1000 };
+        let rho = roots::find_root_brent(0., (2*n) as f64, |x| { let denom: f64 = (0..np1).map(|k| { x.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (x.powf(np1 as f64) / (Self::fact(np1-1) as f64)) / denom - (1. - pe)}, &mut conv).unwrap();
+        let pen = roots::find_root_brent(0., 1., |x| { let denom: f64 = (0..n).map(|k| { rho.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (rho.powf(n as f64) / (Self::fact(n-1) as f64)) / denom - (1. - x)}, &mut conv).unwrap();
+        pen
+    }    
+
     fn update(&mut self, time: f64, load: usize) -> ScalingOperation
     {
         let alpha = if self.last_event_time > 0. { 1. - (-(time - self.last_event_time) / self.ewma_window_len).exp() } else { 0.01 }; 
@@ -223,7 +245,7 @@ impl AutoscalingQNet {
             self.pservers[self.n_servers - 1] = self.qn.change_queue(self.pservers[self.n_servers - 1], Box::new(MG1PS::new(1., server_distribution)));
         }
 
-        self.autoscaling_tracker = Some(AutoscalingTracker::new(20.)); //FIXME take 200 times E[service time]
+        self.autoscaling_tracker = Some(AutoscalingTracker::new(30.)); //FIXME take 300 times E[service time]
         self.pserver_with_tracker = self.pservers[self.n_servers - 1];
         self.update_network();   
 
@@ -238,7 +260,7 @@ impl AutoscalingQNet {
             self.n_servers -= 1;
 
             if self.n_servers > 0 {
-                self.autoscaling_tracker = Some(AutoscalingTracker::new(20.)); //FIXME take 200 times E[service time]
+                self.autoscaling_tracker = Some(AutoscalingTracker::new(30.)); //FIXME take 300 times E[service time]
                 self.pserver_with_tracker = self.pservers[self.n_servers - 1];      
             }
 

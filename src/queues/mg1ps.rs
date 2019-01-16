@@ -1,16 +1,15 @@
-use std::collections::VecDeque;
 use queues::request::Request;
-use queues::{Queue,Process};
+use queues::Queue;
 use float_binaryheap::FloatBinaryHeap;
 
 use distribution::MutDistribution;
 
-#[derive(Clone)]
+//#[derive(Clone)]
 pub struct MG1PS<T> where T: MutDistribution<f64> {
     time: f64,
     work_rate: f64,
-    processes: VecDeque<Process>,
-    backlogged_time: f64,
+    processes: FloatBinaryHeap<Request>,
+    applied_work: f64,
     distribution: T,
 }
 
@@ -19,113 +18,35 @@ impl<T> MG1PS<T> where T: MutDistribution<f64> {
         MG1PS{
             time: 0.,
             work_rate,
-            processes: VecDeque::new(),
-            backlogged_time: 0.,
+            processes: FloatBinaryHeap::new(),
+            applied_work: 0.,
             distribution
         }
-    }
-
-    fn apply_backlogged_time (&mut self) {
-        let work_update = self.backlogged_time *self.work_rate / (self.processes.len() as f64);
-        /*
-        for process in self.processes.iter_mut() {
-            (*process).work -= work_update;
-        }*/
-        for process in &mut self.processes {
-            process.work -= work_update;
-        }
-        self.backlogged_time = 0.;
     }
 }
 
 impl<T> Queue for MG1PS<T> where T: MutDistribution<f64> {
     fn arrival (&mut self, req: Request) {
-        self.apply_backlogged_time();
-        let work = self.distribution.mut_sample(&mut rand::thread_rng());
-        let mut start = 0;
-        let mut end = self.processes.len();
+        let work_target = self.distribution.mut_sample(&mut rand::thread_rng()) + self.applied_work;
 
-        while start < end {
-            let new_bound = (start + end) / 2;
-            if work > self.processes[new_bound].work {
-                end = new_bound;
-            }
-            else {
-                start = new_bound+1;
-            }
-        }
-        /*
-        let mut idx = 0;
-        while idx < self.processes.len() && self.processes[idx].work > work {
-                idx += 1;
-        }
-        */
-        self.processes.insert(end, Process { req, work });
+        self.processes.push(work_target, req);
     }
 
     fn update_time (&mut self, time: f64) {
-        self.backlogged_time += time - self.time;
+        self.applied_work += (time-self.time) * self.work_rate / (self.processes.len() as f64);
         self.time = time
     }
 
     fn read_next_exit(&self) -> Option<(f64, &Request)> {
-        self.processes.back().map(|p| (self.time - self.backlogged_time + p.work*(self.processes.len() as f64)/self.work_rate, &p.req))
+        self.processes.peek().map(|(w,r)| (self.time + (w-self.applied_work) / self.work_rate * self.processes.len() as f64, r))
     }
 
     fn pop_next_exit  (&mut self) -> Option<(f64,Request)> {
-        self.apply_backlogged_time();
         let nb_processes = self.processes.len() as f64;
-        self.processes.pop_back().map(|p| (self.time + p.work*nb_processes/self.work_rate, p.req))
+        self.processes.pop().map(|(w,r)| (self.time + (w-self.applied_work) / self.work_rate * nb_processes, r))
     }
 
     fn read_load (&self) -> usize {
         self.processes.len()
     }
-}
-
-
-pub struct Mg1psOld<T> where T: MutDistribution<f64> {
-    time: f64,
-    work_rate: f64,
-    processes: FloatBinaryHeap<Request>,
-    distribution: T,
-}
-
-impl<T> Mg1psOld<T> where T: MutDistribution<f64> {
-    pub fn new (work_rate: f64, distribution: T) -> Mg1psOld<T> {
-        Mg1psOld {
-            time: 0.,
-            work_rate,
-            processes: FloatBinaryHeap::new(),
-            distribution
-        }
-    }
-}
-
-impl<T> Queue for Mg1psOld<T> where T: MutDistribution<f64> {
-    fn arrival (&mut self, req: Request) {
-        let work = self.distribution.mut_sample(&mut rand::thread_rng());
-        self.processes.push(work, req)
-    }
-
-    fn update_time (&mut self, time: f64) {
-        if !self.processes.is_empty()  {
-            let coef = self.work_rate / (self.processes.len() as f64);
-            let work_update = (time - self.time) * coef;
-            self.processes.translate_keys(-work_update);
-        }
-        self.time = time
-    }
-
-    fn read_next_exit(&self) -> Option<(f64, &Request)> {
-        self.processes.peek().map(|(w,r)| (self.time + w*(self.processes.len() as f64)/self.work_rate, r))
-    }
-
-    fn pop_next_exit  (&mut self) -> Option<(f64,Request)> {
-        self.processes.pop().map(|(w,r)| (self.time + w*(self.processes.len() as f64)/self.work_rate, r))
-    }
-
-    fn read_load (&self) -> usize {
-        self.processes.len()
-    }    
 }

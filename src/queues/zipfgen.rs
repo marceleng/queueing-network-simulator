@@ -15,16 +15,20 @@ pub struct ZipfGenerator<T> where T: MutDistribution<f64> {
     pop_distribution: ZipfDistribution,
     ita_distribution: T,
     next_req: Request,
-    next_arrival: f64
+    next_arrival: f64,
+    total_nb_arrivals: usize,
+    cur_nb_arrivals: usize,
 }
 
 impl<T> ZipfGenerator<T> where T: MutDistribution<f64> {
-    pub fn new (alpha: f64, catalogue_size: usize, distribution: T) -> Self {
+    pub fn new (alpha: f64, catalogue_size: usize, distribution: T, total_nb_arrivals: usize) -> Self {
         let mut ret = ZipfGenerator {
             pop_distribution: ZipfDistribution::new(catalogue_size, alpha).unwrap(),
             ita_distribution: distribution,
             next_req: Request::new(0),
             next_arrival: 0.,
+            total_nb_arrivals,
+            cur_nb_arrivals: 0,
         };
         ret.draw_req();
         ret.draw_arrival();
@@ -53,13 +57,24 @@ impl<T> Queue for ZipfGenerator<T> where T: MutDistribution<f64> {
     fn update_time (&mut self, _time: f64) {}
 
     fn read_next_exit (&self) -> Option<(f64, &Request)> {
-        Some((self.next_arrival,&self.next_req))
+        if self.total_nb_arrivals > self.cur_nb_arrivals {
+            Some((self.next_arrival,&self.next_req))
+        }
+        else {
+            None
+        }
     }
 
     fn pop_next_exit (&mut self) -> Option<(f64,Request)> {
-        let req = self.draw_req();
-        let arrival = self.draw_arrival();
-        Some((arrival, req))
+        if self.cur_nb_arrivals < self.total_nb_arrivals {
+            let req = self.draw_req();
+            let arrival = self.draw_arrival();
+            self.cur_nb_arrivals += 1;
+            Some((arrival, req))
+        }
+        else {
+            None
+        }
     }
 
     fn read_load (&self) -> usize {

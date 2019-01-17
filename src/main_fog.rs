@@ -22,7 +22,7 @@ use distribution::{ConstantDistribution,OffsetExp};
 use queues::mg1ps::MG1PS;
 use queues::mginf::MGINF;
 use queues::zipfgen::ZipfGenerator;
-use queues::queueing_network::QNet;
+use queues::queueing_network::{QNet,TransitionError};
 use queues::file_logger::FileLogger;
 
 
@@ -67,6 +67,9 @@ fn run_sim() {
 
     let lambda = 10000.;
 
+    let nb_arrivals = 100_000_000;
+    let logfile = "result.csv";
+
     //let mut filter = P2LruFilter::new(5*k_lru as usize, delta_app-tau_acc, percentile);
     //filter.set_optimize(true);
     //let filter = P2LruFilter::new(10, delta_app-tau_acc, percentile);
@@ -82,7 +85,7 @@ fn run_sim() {
     //let source = qn.add_queue(Box::new(
     //        ZipfGenerator::new(alpha, catalogue_size, |x| Exp::new(x*lambda))));
     let source = qn.add_queue(Box::new(
-            ZipfGenerator::new(alpha, catalogue_size, Exp::new(lambda))));
+            ZipfGenerator::new(alpha, catalogue_size, Exp::new(lambda), nb_arrivals)));
 
     let fog_proc = qn.add_queue(Box::new(MG1PS::new(c_compf, Exp::new(x_comp))));
     let tls_acc_d = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_tlsf))));
@@ -96,7 +99,7 @@ fn run_sim() {
     let db_queue = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_db))));
 
 
-    let log = qn.add_queue(Box::new(FileLogger::new(1000, "test.csv")));
+    let log = qn.add_queue(Box::new(FileLogger::new(1024, logfile)));
 
     let filter_clone = filter_ptr.clone();
     qn.add_transition(source, Box::new(move |req,_| {
@@ -161,11 +164,14 @@ fn run_sim() {
     qn.add_transition(acc_d, Box::new(move |_,_| log));
 
     //qn.add_queue(Box::new(P2LruFilterCont::new(filter_ptr)));
-
-    for _ in 0..100_000 {
-        qn.make_transition();
+    let mut res = qn.make_transition();
+    while res.is_ok() {
+        res = qn.make_transition();
     }
-    println!("Done");
+    match res.unwrap_err() {
+        TransitionError::NoExitFound => println!("Done"),
+        _ => panic!("Unexpected error")
+    };
 }
 
 

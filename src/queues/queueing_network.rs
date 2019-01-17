@@ -5,6 +5,12 @@ use std::f64::INFINITY;
 
 type Transition = Box<Fn(&Request, &QNet)->usize>;
 
+pub enum TransitionError {
+    NoExitFound,
+    NoTransitionFound,
+    UnknownError
+}
+
 pub struct QNet {
     pub number_of_queues: usize,
     pub queues: Vec<Box<Queue>>,
@@ -52,7 +58,7 @@ impl QNet {
         queue
     } 
 
-    pub fn make_transition (&mut self)
+    pub fn make_transition (&mut self) -> Result<(usize,usize),TransitionError>
     {
         let mut orig_q = self.number_of_queues;
         let mut next_exit = INFINITY;
@@ -72,15 +78,22 @@ impl QNet {
             if let Some((t,mut r)) = self.queues[orig_q].pop_next_exit() {
                 self.time = t;
                 match self.transitions[orig_q] {
-                    None => println!("{} exits at t={}", r.get_id(), t),
+                    None => Err(TransitionError::NoTransitionFound),
                     Some(ref f) => { 
                         let dest_q = f(&r, &self);
                         r.add_log_entry(t, (orig_q, dest_q));
                         //println!("Transition: {}->{}", orig_q, dest_q);
-                        self.queues[dest_q].arrival(r)
+                        self.queues[dest_q].arrival(r);
+                        Ok((orig_q, dest_q))
                     }
                 }
             }
+            else {
+                Err(TransitionError::UnknownError)
+            }
+        }
+        else {
+            Err(TransitionError::NoExitFound)
         }
     }
 

@@ -99,7 +99,7 @@ fn run_sim() {
     let log = qn.add_queue(Box::new(FileLogger::new(1000, "test.csv")));
 
     let filter_clone = filter_ptr.clone();
-    qn.add_transition(source, Box::new(move |req| {
+    qn.add_transition(source, Box::new(move |req,_| {
         let mut cache = filter_clone.borrow_mut();
         //let content = (req.get_id(), req.get_content());
         let content = req.get_content();
@@ -112,7 +112,7 @@ fn run_sim() {
 
     //FOG
     let fcache_clone = fcache_ptr.clone();
-    qn.add_transition(tls_acc_u, Box::new(move |req| {
+    qn.add_transition(tls_acc_u, Box::new(move |req,_| {
         let mut cache = fcache_clone.borrow_mut();
         if cache.contains(&req.get_content()) {
             cache.update(req.get_content());
@@ -122,10 +122,10 @@ fn run_sim() {
             tls_acc_d
         }
     }));
-    qn.add_transition(tls_acc_d, Box::new(move |_| acc_u));
-    qn.add_transition(acc_u, Box::new(move |_| fog_proc));
+    qn.add_transition(tls_acc_d, Box::new(move |_,_| acc_u));
+    qn.add_transition(acc_u, Box::new(move |_,_| fog_proc));
     let filter_clone = filter_ptr.clone();
-    qn.add_transition(fog_proc, Box::new(move |req| {
+    qn.add_transition(fog_proc, Box::new(move |req,_| {
         fcache_ptr.borrow_mut().update(req.get_content());
         //filter_clone.borrow_mut().update((req.get_id(), req.get_content()));
         filter_clone.borrow_mut().update(req.get_content());
@@ -134,7 +134,7 @@ fn run_sim() {
 
     //CLOUD
     let ccache_clone = ccache_ptr.clone();
-    qn.add_transition(tls_core_u, Box::new(move |req| {
+    qn.add_transition(tls_core_u, Box::new(move |req,_| {
         let mut cache = ccache_clone.borrow_mut();
         if cache.contains(&req.get_content()) {
             cache.update(req.get_content());
@@ -144,21 +144,21 @@ fn run_sim() {
             db_queue
         }
     }));
-    qn.add_transition(db_queue, Box::new(move | _ | cloud_proc));
-    qn.add_transition(cloud_proc, Box::new(move |req| {
+    qn.add_transition(db_queue, Box::new(move | _,_ | cloud_proc));
+    qn.add_transition(cloud_proc, Box::new(move |req,_| {
         ccache_ptr.borrow_mut().update(req.get_content());
         core_d
     }));
 
     //let filter_ptr_1 = filter_ptr.clone();
-    qn.add_transition(core_d, Box::new(move |_req| {
+    qn.add_transition(core_d, Box::new(move |_req,_| {
         //filter_ptr_1.borrow_mut().update((req.get_id(), req.get_content()));
         //filter_ptr_1.borrow_mut().update(req.get_content());
         //println!("{}", filter_ptr_1.borrow());
         acc_d
     }));
 
-    qn.add_transition(acc_d, Box::new(move |_| log));
+    qn.add_transition(acc_d, Box::new(move |_,_| log));
 
     //qn.add_queue(Box::new(P2LruFilterCont::new(filter_ptr)));
 

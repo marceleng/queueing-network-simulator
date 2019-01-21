@@ -61,7 +61,7 @@ fn run_sim() {
     //let k_lru = 1.3e6;
     let k_lru = 219_841;
     let na = 156_967;
-    let k1 = 409_609
+    let k1 = 409_609;
 
     let s_cachef = s_cachef_bytes/s_proc;
 

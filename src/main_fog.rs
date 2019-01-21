@@ -35,33 +35,33 @@ fn run_sim() {
     let catalogue_size = 10_000_000;
     let alpha = 1.01;
 
-    let x_comp = 1.;
+    let x_comp = 1e7;
     let s_raw = 1e6;
     let s_proc = 1e4;
     //let delta_app = 100. * 1e-3;
 
     let s_cachef_bytes = 1e9;
     //let s_cachef_bytes = 1e5;
-    let c_compf = 3. * 1e2;
+    let c_compf = 3e9;
     let c_acc = (10. / 8.) * 1e9;
-    let tau_acc = 4. * 1e-3;
+    let tau_acc = 4e-3;
     let tau_tlsf = tau_acc;
 
-    let c_compc = 2e2;
+    let c_compc = 2e9;
     let tau_db = 1e-3;
     let c_core = (1./8.) * (1e9);
     let tau_core = 40. * 1e-3;
     let tau_tlsc = tau_core + tau_acc;
 
-    let s_cachec = 3.1e5;
+    let s_cachec = 1_998_903;
     //let phi_opt = 0.42;
 
     //let k_LFU_2s = 1.2e6;
     //let k_LFU = 6.1e5;
     //let k_lru = 1.3e6;
-    let k_lru = 2.1e5;
-    let na = 149_850;
-    let k1 = 387_707;
+    let k_lru = 219_841;
+    let na = 156_967;
+    let k1 = 409_609
 
     let s_cachef = s_cachef_bytes/s_proc;
 

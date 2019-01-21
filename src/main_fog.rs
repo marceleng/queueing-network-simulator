@@ -40,8 +40,8 @@ fn run_sim() {
     let s_proc = 1e4;
     //let delta_app = 100. * 1e-3;
 
-    //let s_cachef_bytes = 1e9;
-    let s_cachef_bytes = 1e5;
+    let s_cachef_bytes = 1e9;
+    //let s_cachef_bytes = 1e5;
     let c_compf = 3. * 1e2;
     let c_acc = (10. / 8.) * 1e9;
     let tau_acc = 4. * 1e-3;

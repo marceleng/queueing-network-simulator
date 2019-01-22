@@ -67,14 +67,14 @@ fn run_sim() {
 
     let lambda = 10000.;
 
-    let nb_arrivals = 100_000_000;
+    let nb_arrivals = 500_000_000;
     let logfile = "result.csv";
 
     //let mut filter = P2LruFilter::new(5*k_lru as usize, delta_app-tau_acc, percentile);
     //filter.set_optimize(true);
     //let filter = P2LruFilter::new(10, delta_app-tau_acc, percentile);
     let filter = AgingBloomFilterFPGA::new(k1,0.01);
-    //let mut filter: LruCache<usize> = LruCache::new(k_lru as usize);
+    //let filter: LruCache<usize> = LruCache::new(k_lru as usize);
     let filter_ptr = Rc::new(RefCell::new(filter));
     let fog_cache: LruCache<usize> = LruCache::new(s_cachef as usize);
     let fcache_ptr = Rc::new(RefCell::new(fog_cache));
@@ -87,14 +87,21 @@ fn run_sim() {
     let source = qn.add_queue(Box::new(
             ZipfGenerator::new(alpha, catalogue_size, Exp::new(lambda), nb_arrivals)));
 
-    let fog_proc = qn.add_queue(Box::new(MG1PS::new(c_compf, Exp::new(x_comp))));
+    let fog_proc = qn.add_queue(Box::new(MG1PS::new(c_compf, Exp::new(1. / x_comp))));
     let tls_acc_d = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_tlsf))));
     let tls_acc_u = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_tlsf))));
 
-    let core_d = qn.add_queue(Box::new(MG1PS::new(c_core, OffsetExp::new(tau_core, s_proc))));
-    let cloud_proc = qn.add_queue(Box::new(MGINF::new(c_compc, Exp::new(x_comp))));
-    let acc_u = qn.add_queue(Box::new(MG1PS::new(c_acc, OffsetExp::new(tau_acc, s_raw))));
-    let acc_d  = qn.add_queue(Box::new(MG1PS::new(c_acc, OffsetExp::new(tau_acc, s_proc))));
+    let core_d = qn.add_queue(Box::new(MG1PS::new(c_core, Exp::new(1. / s_proc))));
+    let core_d_propagation = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_core))));
+
+    let cloud_proc = qn.add_queue(Box::new(MGINF::new(c_compc, Exp::new(1. / x_comp))));
+
+    let acc_u = qn.add_queue(Box::new(MG1PS::new(c_acc, Exp::new(1. / s_raw))));
+    let acc_u_propagation = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_acc))));
+
+    let acc_d  = qn.add_queue(Box::new(MG1PS::new(c_acc, Exp::new(1. / s_proc))));
+    let acc_d_propagation = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_acc))));
+
     let tls_core_u = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_tlsc))));
     let db_queue = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_db))));
 
@@ -126,7 +133,9 @@ fn run_sim() {
         }
     }));
     qn.add_transition(tls_acc_d, Box::new(move |_,_| acc_u));
-    qn.add_transition(acc_u, Box::new(move |_,_| fog_proc));
+    qn.add_transition(acc_u, Box::new(move |_,_| acc_u_propagation));
+    qn.add_transition(acc_u_propagation, Box::new(move |_,_| fog_proc));
+
     let filter_clone = filter_ptr.clone();
     qn.add_transition(fog_proc, Box::new(move |req,_| {
         fcache_ptr.borrow_mut().update(req.get_content());
@@ -154,14 +163,11 @@ fn run_sim() {
     }));
 
     //let filter_ptr_1 = filter_ptr.clone();
-    qn.add_transition(core_d, Box::new(move |_req,_| {
-        //filter_ptr_1.borrow_mut().update((req.get_id(), req.get_content()));
-        //filter_ptr_1.borrow_mut().update(req.get_content());
-        //println!("{}", filter_ptr_1.borrow());
-        acc_d
-    }));
+    qn.add_transition(core_d, Box::new(move |_,_| core_d_propagation));
+    qn.add_transition(core_d_propagation, Box::new(move |_,_| acc_d ));
 
-    qn.add_transition(acc_d, Box::new(move |_,_| log));
+    qn.add_transition(acc_d, Box::new(move |_,_| acc_d_propagation));
+    qn.add_transition(acc_d_propagation, Box::new(move |_,_| log));
 
     //qn.add_queue(Box::new(P2LruFilterCont::new(filter_ptr)));
     let mut res = qn.make_transition();

@@ -91,10 +91,17 @@ fn run_sim() {
     let tls_acc_d = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_tlsf))));
     let tls_acc_u = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_tlsf))));
 
-    let core_d = qn.add_queue(Box::new(MG1PS::new(c_core, OffsetExp::new(tau_core, s_proc))));
+    let core_d = qn.add_queue(Box::new(MG1PS::new(c_core, new(s_proc))));
+    let core_d_propagation = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_core))));
+
     let cloud_proc = qn.add_queue(Box::new(MGINF::new(c_compc, Exp::new(x_comp))));
-    let acc_u = qn.add_queue(Box::new(MG1PS::new(c_acc, OffsetExp::new(tau_acc, s_raw))));
-    let acc_d  = qn.add_queue(Box::new(MG1PS::new(c_acc, OffsetExp::new(tau_acc, s_proc))));
+
+    let acc_u = qn.add_queue(Box::new(MG1PS::new(c_acc, Exp::new(s_raw))));
+    let acc_u_propagation = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_acc))));
+
+    let acc_d  = qn.add_queue(Box::new(MG1PS::new(c_acc, Exp::new(s_proc))));
+    let acc_d_propagation = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_acc))));
+
     let tls_core_u = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_tlsc))));
     let db_queue = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_db))));
 
@@ -126,7 +133,9 @@ fn run_sim() {
         }
     }));
     qn.add_transition(tls_acc_d, Box::new(move |_,_| acc_u));
-    qn.add_transition(acc_u, Box::new(move |_,_| fog_proc));
+    qn.add_transition(acc_u, Box::new(move |_,_| acc_u_propagation));
+    qn.add_transition(acc_u_propagation, Box::new(move |_,_| fog_proc));
+
     let filter_clone = filter_ptr.clone();
     qn.add_transition(fog_proc, Box::new(move |req,_| {
         fcache_ptr.borrow_mut().update(req.get_content());
@@ -154,14 +163,11 @@ fn run_sim() {
     }));
 
     //let filter_ptr_1 = filter_ptr.clone();
-    qn.add_transition(core_d, Box::new(move |_req,_| {
-        //filter_ptr_1.borrow_mut().update((req.get_id(), req.get_content()));
-        //filter_ptr_1.borrow_mut().update(req.get_content());
-        //println!("{}", filter_ptr_1.borrow());
-        acc_d
-    }));
+    qn.add_transition(core_d, Box::new(move |_,_| core_d_propagation));
+    qn.add_transition(core_d_propagation, Box::new(move |_,_| acc_d ));
 
-    qn.add_transition(acc_d, Box::new(move |_,_| log));
+    qn.add_transition(acc_d, Box::new(move |_,_| acc_d_propagation));
+    qn.add_transition(acc_d_propagation, Box::new(move |_,_| log));
 
     //qn.add_queue(Box::new(P2LruFilterCont::new(filter_ptr)));
     let mut res = qn.make_transition();

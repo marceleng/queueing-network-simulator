@@ -33,7 +33,7 @@ use caches::Cache;
 fn run_sim() {
 
     let catalogue_size = 10_000_000;
-    let alpha = 1.01;
+    let alpha = 1.0;
 
     let x_comp = 1e7;
     let s_raw = 1e6;
@@ -53,15 +53,15 @@ fn run_sim() {
     let tau_core = 40. * 1e-3;
     let tau_tlsc = tau_core + tau_acc;
 
-    let s_cachec = 1_998_903;
+    let s_cachec = 1_995_569;
     //let phi_opt = 0.42;
 
     //let k_LFU_2s = 1.2e6;
     //let k_LFU = 6.1e5;
     //let k_lru = 1.3e6;
-    let k_lru = 219_841;
-    let na = 156_967;
-    let k1 = 409_609;
+    let k_lru = 212_292;
+    let na = 151_507;
+    let k1 = 392_787;
 
     let s_cachef = s_cachef_bytes/s_proc;
 

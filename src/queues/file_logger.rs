@@ -11,6 +11,7 @@ pub struct FileLogger {
     buffer: Vec<Request>,
     buffer_size: usize,
     file: File,
+    init: bool,
 }
 
 impl FileLogger {
@@ -20,12 +21,19 @@ impl FileLogger {
         FileLogger {
             buffer: Vec::with_capacity(buffer_size),
             buffer_size,
-            file: File::create(filename).expect(&("Could not open file ".to_owned() + filename))
+            file: File::create(filename).expect(&("Could not open file ".to_owned() + filename)),
+            init: true,
         }
     }
 
     fn dump_log (&mut self) -> Result<()>
     {
+        if self.init {
+            self.init = false;
+        }
+        else { // If lines have already been dumped, we need to return
+            self.file.write_all("\n".as_bytes())?;
+        }
         let s: Vec<String> = self.buffer.drain(..).map(|req: Request| { 
             let log_str: Vec<String> = req.get_log().into_iter().map(|(key,(orig,dest))| {
                 format!("{}:{}:{}", key, orig, dest)

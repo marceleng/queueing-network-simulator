@@ -92,7 +92,7 @@ impl<T> AggregatingMG1PS<T> where T: MutDistribution<f64> {
 impl<T> Queue for AggregatingMG1PS<T> where T: MutDistribution<f64> {
     fn arrival (&mut self, req: Request) {
         let content = req.get_content();
-        let to_aggregate = self.pit.contains_key(&content) && !self.pit.get(&content).unwrap().is_empty();
+        let to_aggregate = self.pit.contains_key(&content) && !&self.pit[&content].is_empty();
 
         if to_aggregate {
             self.pit.get_mut(&content).unwrap().push_back(req);
@@ -115,7 +115,7 @@ impl<T> Queue for AggregatingMG1PS<T> where T: MutDistribution<f64> {
             Some((self.queue.time, self.to_release.front().unwrap()))
         }
         else {
-            self.queue.peek().map(|(t,c)| (t,self.pit.get(c).unwrap().front().unwrap()))
+            self.queue.peek().map(|(t,c)| (t,(&self.pit[c]).front().unwrap()))
         }
     }
 

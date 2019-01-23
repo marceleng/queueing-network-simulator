@@ -44,8 +44,7 @@ impl AutoscalingTracker {
         let nm1 = n - 1;
         let mut conv = roots::SimpleConvergency { eps:1e-15f64, max_iter:1000 };
         let rho = roots::find_root_brent(0., (2*n) as f64, |x| { let denom: f64 = (0..nm1).map(|k| { x.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (x.powf(nm1 as f64) / (Self::fact(nm1-1) as f64)) / denom - (1. - pe)}, &mut conv).unwrap();
-        let pen = roots::find_root_brent(0., 1., |x| { let denom: f64 = (0..n).map(|k| { rho.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (rho.powf(n as f64) / (Self::fact(n-1) as f64)) / denom - (1. - x)}, &mut conv).unwrap();
-        pen
+        roots::find_root_brent(0., 1., |x| { let denom: f64 = (0..n).map(|k| { rho.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (rho.powf(n as f64) / (Self::fact(n-1) as f64)) / denom - (1. - x)}, &mut conv).unwrap()
     }
 
     fn upscale_threshold(pe: f64, n: usize) -> f64
@@ -53,8 +52,7 @@ impl AutoscalingTracker {
         let np1 = n + 1;
         let mut conv = roots::SimpleConvergency { eps:1e-15f64, max_iter:1000 };
         let rho = roots::find_root_brent(0., (2*n) as f64, |x| { let denom: f64 = (0..np1).map(|k| { x.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (x.powf(np1 as f64) / (Self::fact(np1-1) as f64)) / denom - (1. - pe)}, &mut conv).unwrap();
-        let pen = roots::find_root_brent(0., 1., |x| { let denom: f64 = (0..n).map(|k| { rho.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (rho.powf(n as f64) / (Self::fact(n-1) as f64)) / denom - (1. - x)}, &mut conv).unwrap();
-        pen
+        roots::find_root_brent(0., 1., |x| { let denom: f64 = (0..n).map(|k| { rho.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (rho.powf(n as f64) / (Self::fact(n-1) as f64)) / denom - (1. - x)}, &mut conv).unwrap()
     }
 
     fn update(&mut self, time: f64, load: usize) -> ScalingOperation

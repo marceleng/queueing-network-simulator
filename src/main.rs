@@ -24,7 +24,7 @@ use queues::file_logger::FileLogger;
 
 fn run_sim(rho: f64) {
 
-    let n_servers = 17;
+    let n_servers = 60;
 
     let mu = 1./0.100; //100 ms
     let lambda = rho * mu;
@@ -35,7 +35,7 @@ fn run_sim(rho: f64) {
                                       Box::new(FileLogger::new(1024, &format!("results/results_{:.2}.csv", rho))));
 
     for _i in 0..n_servers {
-        qn.add_server(ConstantDistribution::new(tau_network), Exp::new(mu));
+        qn.add_server(ConstantDistribution::new(tau_network), /*Exp::new(mu)*/ConstantDistribution::new(1./mu));
     }
     //qn.add_server(ConstantDistribution::new(tau_network), Exp::new(mu));
     //qn.remove_server();
@@ -51,8 +51,8 @@ fn run_sim(rho: f64) {
 
 
 fn main () {   
-    let mut rho = 14.0;
-    while rho <= 14.0 {
+    let mut rho = 43.6;
+    while rho <= 43.6 {
         run_sim(rho);
         rho += 0.1;
     }

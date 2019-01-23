@@ -10,6 +10,8 @@ use distribution::MutDistribution;
 use rand::distributions::{Exp};
 use distribution::{ConstantDistribution};
 
+use rand::Rng;
+
 enum ScalingOperation {
     NOOP,
     DOWNSCALING,
@@ -20,39 +22,46 @@ struct AutoscalingTracker {
     num_events: usize,
     proba_empty_ewma: f64,
     ewma_window_len: f64,
+    upscale_threshold: f64,
+    downscale_threshold: f64,
     did_request_scaling: bool
 }
 
 impl AutoscalingTracker {
-    fn new(_ewma_window_len: f64) -> Self {
+    fn new(_downscale_threshold: f64, _upscale_threshold: f64, _ewma_window_len: f64) -> Self {
         AutoscalingTracker {
             last_event_time: -1.,
             num_events: 0,
             proba_empty_ewma: 0.6,
             ewma_window_len: _ewma_window_len,
+            upscale_threshold: _upscale_threshold,
+            downscale_threshold: _downscale_threshold,
             did_request_scaling: false
         }
     }
 
-    fn fact(n: usize) -> usize
+    fn fact(n: f64) -> f64 
     {
-        if n == 0 || n == 1 { 1 } else { n * Self::fact(n-1) }
+        if (n.abs() < 0.1) || ((n - 1.).abs() < 0.1) { 1. } else { n * Self::fact(n - 1.) }
     }
 
     fn downscale_threshold(pe: f64, n: usize) -> f64
     {
+        if n < 2 { return 1.; }
         let nm1 = n - 1;
+        let nm2 = n - 2;
         let mut conv = roots::SimpleConvergency { eps:1e-15f64, max_iter:1000 };
-        let rho = roots::find_root_brent(0., (2*n) as f64, |x| { let denom: f64 = (0..nm1).map(|k| { x.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (x.powf(nm1 as f64) / (Self::fact(nm1-1) as f64)) / denom - (1. - pe)}, &mut conv).unwrap();
-        roots::find_root_brent(0., 1., |x| { let denom: f64 = (0..n).map(|k| { rho.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (rho.powf(n as f64) / (Self::fact(n-1) as f64)) / denom - (1. - x)}, &mut conv).unwrap()
+        let rho = roots::find_root_brent(0., (2*n) as f64, |x| { let denom: f64 = (0..nm1).map(|k| { x.powf(k as f64) / (Self::fact(k as f64))}).sum(); (x.powf(nm1 as f64) / (Self::fact(nm2 as f64))) / denom - (1. - pe)}, &mut conv).unwrap();
+        roots::find_root_brent(0., 1., |x| { let denom: f64 = (0..n).map(|k| { rho.powf(k as f64) / (Self::fact(k as f64))}).sum(); (rho.powf(n as f64) / (Self::fact(nm1 as f64))) / denom - (1. - x)}, &mut conv).unwrap()
     }
 
     fn upscale_threshold(pe: f64, n: usize) -> f64
     {
         let np1 = n + 1;
+        let nm1 = n - 1;
         let mut conv = roots::SimpleConvergency { eps:1e-15f64, max_iter:1000 };
-        let rho = roots::find_root_brent(0., (2*n) as f64, |x| { let denom: f64 = (0..np1).map(|k| { x.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (x.powf(np1 as f64) / (Self::fact(np1-1) as f64)) / denom - (1. - pe)}, &mut conv).unwrap();
-        roots::find_root_brent(0., 1., |x| { let denom: f64 = (0..n).map(|k| { rho.powf(k as f64) / (Self::fact(k) as f64)}).sum(); (rho.powf(n as f64) / (Self::fact(n-1) as f64)) / denom - (1. - x)}, &mut conv).unwrap()
+        let rho = roots::find_root_brent(0., (2*n) as f64, |x| { let denom: f64 = (0..np1).map(|k| { x.powf(k as f64) / (Self::fact(k as f64))}).sum(); (x.powf(np1 as f64) / (Self::fact(n as f64))) / denom - (1. - pe)}, &mut conv).unwrap();
+        roots::find_root_brent(0., 1., |x| { let denom: f64 = (0..n).map(|k| { rho.powf(k as f64) / (Self::fact(k as f64))}).sum(); (rho.powf(n as f64) / (Self::fact(nm1 as f64))) / denom - (1. - x)}, &mut conv).unwrap()
     }
 
     fn update(&mut self, time: f64, load: usize) -> ScalingOperation
@@ -63,14 +72,14 @@ impl AutoscalingTracker {
         //println!("time={}, last_time={}, load={}, ewma={}", time, self.last_event_time, load, self.proba_empty_ewma);
         self.last_event_time = time;
         self.num_events += 1;
-        if self.proba_empty_ewma > 0.75 && self.num_events >= 50 && !self.did_request_scaling {
+        if self.proba_empty_ewma > self.downscale_threshold && self.num_events >= 50 && !self.did_request_scaling { 
             self.did_request_scaling = true;
-            ScalingOperation::DOWNSCALING
-        } else if self.proba_empty_ewma < 0.40 && self.num_events >= 50 && !self.did_request_scaling {
-            self.did_request_scaling = true;
-            ScalingOperation::UPSCALING
-        } else {
-            ScalingOperation::NOOP
+            ScalingOperation::DOWNSCALING 
+        } else if self.proba_empty_ewma < self.upscale_threshold && self.num_events >= 50 && !self.did_request_scaling { 
+            self.did_request_scaling = true;           
+            ScalingOperation::UPSCALING 
+        } else { 
+            ScalingOperation::NOOP 
         }
     }
 }
@@ -162,13 +171,13 @@ impl AutoscalingQNet {
                     }
                 }
                 match scaling_op {
-                    ScalingOperation::UPSCALING => {
-                        println!("Let's upscale");
-                        self.add_server(ConstantDistribution::new(0.000_200), Exp::new(10.))
+                    ScalingOperation::UPSCALING => { 
+                        println!("t {} upscale_to {}", t, self.n_servers + 1); 
+                        //self.add_server(ConstantDistribution::new(/*0.000_200*/0.000_000), /* Exp::new(mu)*/ConstantDistribution::new(1./10.)) 
                     },
-                    ScalingOperation::DOWNSCALING => {
-                        println!("Let's downscale");
-                        self.remove_server()
+                    ScalingOperation::DOWNSCALING => { 
+                        println!("t{} downscale_to {}", t, self.n_servers - 1); 
+                        //self.remove_server() 
                     },
                     ScalingOperation::NOOP => ()
                 }
@@ -204,8 +213,17 @@ impl AutoscalingQNet {
             // Transition link({server n-1 or src}, server n) -> { server n }
             {
                 let source = self.pnetwork_arcs[last_server_idx];
-                let dest = self.pservers[last_server_idx];
-                self.qn.add_transition(source, Box::new(move |_,_| dest ));
+                let potential_dest = self.pservers[last_server_idx];
+                let JIQ = false;
+                if JIQ {
+                    let fallback_dests = self.pservers.clone();  
+                    self.qn.add_transition(source, Box::new(move |ref _req, ref qn| { 
+                        let load = qn.get_queue(potential_dest).read_load();
+                        if load == 0 { potential_dest } else { *rand::thread_rng().choose(&fallback_dests).unwrap() }
+                    }));
+                } else {
+                    self.qn.add_transition(source, Box::new(move |_,_| potential_dest ));
+                }
             }
 
             // Transition server n -> file_logger
@@ -215,6 +233,16 @@ impl AutoscalingQNet {
                 self.qn.add_transition(source, Box::new(move |_,_| dest ));
             }
         }
+    }
+
+    fn do_autoscale(&mut self)
+    {
+        let pe = 0.8;
+        let downscale_threshold = AutoscalingTracker::downscale_threshold(pe, self.n_servers);
+        let upscale_threshold = AutoscalingTracker::upscale_threshold(pe, self.n_servers); 
+        let ewma_len = 30.; //FIXME take 300 times E[service time]
+        self.autoscaling_tracker = Some(AutoscalingTracker::new(downscale_threshold, upscale_threshold, ewma_len));     
+        self.pserver_with_tracker = self.pservers[self.n_servers - 1];  
     }
 
     pub fn add_server<T1: 'static+ MutDistribution<f64>,T2: 'static+ MutDistribution<f64>>(&mut self, link_distribution: T1, server_distribution: T2)
@@ -243,11 +271,10 @@ impl AutoscalingQNet {
             self.pservers[self.n_servers - 1] = self.qn.change_queue(self.pservers[self.n_servers - 1], Box::new(MG1PS::new(1., server_distribution)));
         }
 
-        self.autoscaling_tracker = Some(AutoscalingTracker::new(30.)); //FIXME take 300 times E[service time]
-        self.pserver_with_tracker = self.pservers[self.n_servers - 1];
-        self.update_network();
+        self.do_autoscale();
+        self.update_network();   
 
-        println!("n_servers = {}", self.n_servers);
+        //println!("n_servers = {}", self.n_servers);
     }
 
     pub fn remove_server(&mut self) {
@@ -258,13 +285,12 @@ impl AutoscalingQNet {
             self.n_servers -= 1;
 
             if self.n_servers > 0 {
-                self.autoscaling_tracker = Some(AutoscalingTracker::new(30.)); //FIXME take 300 times E[service time]
-                self.pserver_with_tracker = self.pservers[self.n_servers - 1];
+                self.do_autoscale();    
             }
 
             self.update_network();
         }
-        println!("n_servers = {}", self.n_servers);
+        //println!("n_servers = {}", self.n_servers);
 
     }
 }

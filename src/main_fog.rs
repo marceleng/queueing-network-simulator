@@ -12,14 +12,13 @@ extern crate zipf;
 use zipf::ZipfDistribution;
 use rand::distributions::Distribution;
 
-use std::env;
 use std::rc::Rc;
 use std::cell::RefCell;
 
 use rand::distributions::{Exp};
-use distribution::{ConstantDistribution,OffsetExp};
+use distribution::ConstantDistribution;
 
-use queues::mg1ps::MG1PS;
+use queues::mg1ps::{AggregatingMG1PS,MG1PS};
 use queues::mginf::MGINF;
 use queues::zipfgen::ZipfGenerator;
 use queues::queueing_network::{QNet,TransitionError};
@@ -87,7 +86,7 @@ fn run_sim() {
     let source = qn.add_queue(Box::new(
             ZipfGenerator::new(alpha, catalogue_size, Exp::new(lambda), nb_arrivals)));
 
-    let fog_proc = qn.add_queue(Box::new(MG1PS::new(c_compf, Exp::new(1. / x_comp))));
+    let fog_proc = qn.add_queue(Box::new(AggregatingMG1PS::new(c_compf, Exp::new(1. / x_comp))));
     let tls_acc_d = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_tlsf))));
     let tls_acc_u = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_tlsf))));
 
@@ -96,7 +95,7 @@ fn run_sim() {
 
     let cloud_proc = qn.add_queue(Box::new(MGINF::new(c_compc, Exp::new(1. / x_comp))));
 
-    let acc_u = qn.add_queue(Box::new(MG1PS::new(c_acc, Exp::new(1. / s_raw))));
+    let acc_u = qn.add_queue(Box::new(AggregatingMG1PS::new(c_acc, Exp::new(1. / s_raw))));
     let acc_u_propagation = qn.add_queue(Box::new(MGINF::new(1., ConstantDistribution::new(tau_acc))));
 
     let acc_d  = qn.add_queue(Box::new(MG1PS::new(c_acc, Exp::new(1. / s_proc))));

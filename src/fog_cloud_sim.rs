@@ -59,7 +59,7 @@ fn run_sim(mode: Filter, s_cachec: usize) {
 
     let lambda = 10000.;
 
-    let nb_arrivals = 500_000_000;
+    let nb_arrivals = 100_000_000;
     let logfile = match mode {
         Filter::Lru(_) => "result-lru.csv",
         Filter::Abf(_) => "result-abf.csv",

@@ -3,8 +3,11 @@
 
 mod queues;
 mod caches;
+mod fog_cloud_sim;
 pub mod float_binaryheap;
 pub mod distribution;
+
+use std::env;
 
 extern crate rand;
 extern crate zipf;
@@ -22,7 +25,7 @@ use queues::autoscaling_qnetwork::AutoscalingQNet;
 use queues::file_logger::FileLogger;
 
 
-fn run_sim(rho: f64) {
+fn autoscaling_sim(rho: f64) {
 
     let n_servers = 60;
 
@@ -50,10 +53,25 @@ fn run_sim(rho: f64) {
 
 
 
-fn main () {   
+fn run_autoscaling (_: env::Args) {
     let mut rho = 43.6;
     while rho <= 43.6 {
-        run_sim(rho);
+        autoscaling_sim(rho);
         rho += 0.1;
+    }
+}
+
+fn main() {
+    let mut args = env::args();
+    args.next();
+    let exp = args.next().expect("No experiment provided as runtime argument");
+    if exp == "autoscaling" {
+        run_autoscaling(args);
+    }
+    else if exp == "fog" {
+        fog_cloud_sim::run(args);
+    }
+    else {
+        panic!("Could not recognize experiment: {}", exp);
     }
 }

@@ -1,11 +1,6 @@
 #![allow(dead_code)]
 #![warn(unused_imports)]
 
-mod queues;
-mod caches;
-pub mod float_binaryheap;
-pub mod distribution;
-
 extern crate rand;
 extern crate zipf;
 
@@ -14,6 +9,8 @@ use rand::distributions::Distribution;
 
 use std::rc::Rc;
 use std::cell::RefCell;
+
+use std::env;
 
 use rand::distributions::{Exp};
 use distribution::ConstantDistribution;
@@ -28,8 +25,16 @@ use queues::file_logger::FileLogger;
 use caches::lru_cache::LruCache;
 use caches::abf_fpga_cache::AgingBloomFilterFPGA;
 use caches::Cache;
+use caches::{PerfectLfu,RandomAccept};
 
-fn run_sim() {
+enum Filter {
+    Blind(f64),
+    Lru(usize),
+    Lfu(usize),
+    Abf(usize),
+}
+
+fn run_sim(mode: Filter, s_cachec: usize) {
 
     let catalogue_size = 10_000_000;
     let alpha = 1.0;
@@ -37,10 +42,8 @@ fn run_sim() {
     let x_comp = 1e7;
     let s_raw = 1e6;
     let s_proc = 1e4;
-    //let delta_app = 100. * 1e-3;
 
     let s_cachef_bytes = 1e9;
-    //let s_cachef_bytes = 1e5;
     let c_compf = 3e9;
     let c_acc = (10. / 8.) * 1e9;
     let tau_acc = 4e-3;
@@ -52,37 +55,33 @@ fn run_sim() {
     let tau_core = 40. * 1e-3;
     let tau_tlsc = tau_core + tau_acc;
 
-    let s_cachec = 1_995_569;
-    //let phi_opt = 0.42;
-
-    //let k_LFU_2s = 1.2e6;
-    //let k_LFU = 6.1e5;
-    //let k_lru = 1.3e6;
-    let k_lru = 212_292;
-    let na = 151_507;
-    let k1 = 392_787;
-
     let s_cachef = s_cachef_bytes/s_proc;
 
     let lambda = 10000.;
 
     let nb_arrivals = 500_000_000;
-    let logfile = "result.csv";
+    let logfile = match mode {
+        Filter::Lru(_) => "result-lru.csv",
+        Filter::Abf(_) => "result-abf.csv",
+        Filter::Blind(_) => "result-blind.csv",
+        Filter::Lfu(_) => "result-lfu.csv",
+    };
 
-    //let mut filter = P2LruFilter::new(5*k_lru as usize, delta_app-tau_acc, percentile);
-    //filter.set_optimize(true);
-    //let filter = P2LruFilter::new(10, delta_app-tau_acc, percentile);
-    let filter = AgingBloomFilterFPGA::new(k1,0.01);
+    let filter_ptr: Rc<RefCell<Cache<usize>>> = match mode {
+        Filter::Lru(klru) => Rc::new(RefCell::new(LruCache::new(klru))),
+        Filter::Abf(k1) => Rc::new(RefCell::new(AgingBloomFilterFPGA::new(k1,0.01))),
+        Filter::Blind(phi) => Rc::new(RefCell::new(RandomAccept::from_value(phi).unwrap())),
+        Filter::Lfu(klfu) => Rc::new(RefCell::new(PerfectLfu::new(klfu))),
+    };
+
     //let filter: LruCache<usize> = LruCache::new(k_lru as usize);
-    let filter_ptr = Rc::new(RefCell::new(filter));
+    //let filter_ptr = Rc::new(RefCell::new(filter));
     let fog_cache: LruCache<usize> = LruCache::new(s_cachef as usize);
     let fcache_ptr = Rc::new(RefCell::new(fog_cache));
     let cloud_cache: LruCache<usize> = LruCache::new(s_cachec as usize);
     let ccache_ptr = Rc::new(RefCell::new(cloud_cache));
 
     let mut qn = QNet::new();
-    //let source = qn.add_queue(Box::new(
-    //        ZipfGenerator::new(alpha, catalogue_size, |x| Exp::new(x*lambda))));
     let source = qn.add_queue(Box::new(
             ZipfGenerator::new(alpha, catalogue_size, Exp::new(lambda), nb_arrivals)));
 
@@ -205,7 +204,7 @@ fn sixcn_sim(catalogue_size: usize, alpha: f64, cache_size: usize, filter_size: 
 }
 
 
-fn main () {
+pub fn run (mut args: env::Args) {
    
     /*
     let args: Vec<String> = env::args().collect();
@@ -222,6 +221,19 @@ fn main () {
         sixcn_sim(catalogue_size, alpha, cache_size, filter_size);
     }
     */
-    
-    run_sim()
+    let filter_arg = args.next().expect("No filter specified at runtime");
+    let mode = match filter_arg.as_ref() {
+        "abf" => Filter::Abf(392_787),
+        "lru" => Filter::Lru(212_292),
+        "blind" => Filter::Blind(0.084),
+        "lfu" => Filter::Lfu(145_456),
+        _ => panic!("Unrecognized filter: {}", filter_arg)
+    };
+    let s_cachec = match mode {
+        Filter::Abf(_) | Filter::Lru(_) => 1_995_569,
+        Filter::Lfu(_) => 2_000_000,
+        Filter::Blind(_) => 3_100_000,
+    };
+
+    run_sim(mode, s_cachec);
 }

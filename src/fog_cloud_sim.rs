@@ -223,16 +223,16 @@ pub fn run (mut args: env::Args) {
     */
     let filter_arg = args.next().expect("No filter specified at runtime");
     let mode = match filter_arg.as_ref() {
-        "abf" => Filter::Abf(392_787),
-        "lru" => Filter::Lru(212_292),
+        "abf" => Filter::Abf(528_242),
+        "lru" => Filter::Lru(271_440),
         "blind" => Filter::Blind(0.084),
-        "lfu" => Filter::Lfu(145_456),
+        "lfu" => Filter::Lfu(142_581),
         _ => panic!("Unrecognized filter: {}", filter_arg)
     };
     let s_cachec = match mode {
-        Filter::Abf(_) | Filter::Lru(_) => 1_995_569,
-        Filter::Lfu(_) => 2_000_000,
-        Filter::Blind(_) => 3_100_000,
+        Filter::Abf(_) | Filter::Lru(_) => 2_878_128,
+        Filter::Lfu(_) => 2_962_421,
+        Filter::Blind(_) => 2_823_474,
     };
 
     run_sim(mode, s_cachec);

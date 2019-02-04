@@ -116,7 +116,7 @@ impl AutoscalingQNet {
         }
     }
 
-    pub fn make_transition (&mut self)
+    pub fn make_transition (&mut self) -> f64
     {
         let mut orig_q = self.qn.number_of_queues;
         let mut next_exit = INFINITY;
@@ -176,13 +176,14 @@ impl AutoscalingQNet {
                         self.add_server(ConstantDistribution::new(/*0.000_200*/0.000_000), /* Exp::new(mu)*/ConstantDistribution::new(1./10.)) 
                     },
                     ScalingOperation::DOWNSCALING => { 
-                        println!("t{} downscale_to {}", t, self.n_servers - 1); 
+                        println!("t {} downscale_to {}", t, self.n_servers - 1); 
                         self.remove_server() 
                     },
                     ScalingOperation::NOOP => ()
                 }
             }
         }
+        next_exit
     }
 
     fn update_network(&mut self)
@@ -237,7 +238,7 @@ impl AutoscalingQNet {
 
     fn do_autoscale(&mut self)
     {
-        let pe = 0.8;
+        let pe = 0.6;
         let downscale_threshold = AutoscalingTracker::downscale_threshold(pe, self.n_servers);
         let upscale_threshold = AutoscalingTracker::upscale_threshold(pe, self.n_servers); 
         let ewma_len = 30.; //FIXME take 300 times E[service time]

@@ -173,11 +173,11 @@ impl AutoscalingQNet {
                 match scaling_op {
                     ScalingOperation::UPSCALING => { 
                         println!("t {} upscale_to {}", t, self.n_servers + 1); 
-                        //self.add_server(ConstantDistribution::new(/*0.000_200*/0.000_000), /* Exp::new(mu)*/ConstantDistribution::new(1./10.)) 
+                        self.add_server(ConstantDistribution::new(/*0.000_200*/0.000_000), /* Exp::new(mu)*/ConstantDistribution::new(1./10.)) 
                     },
                     ScalingOperation::DOWNSCALING => { 
                         println!("t{} downscale_to {}", t, self.n_servers - 1); 
-                        //self.remove_server() 
+                        self.remove_server() 
                     },
                     ScalingOperation::NOOP => ()
                 }

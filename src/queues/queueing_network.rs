@@ -3,8 +3,16 @@ use queues::request::Request;
 use std::vec::Vec;
 use std::f64::INFINITY;
 
-type Transition = Box<Fn(&Request, &QNet)->usize>;
+type TransitionFunc = Box<Fn(&Request, &QNet)->usize>;
 
+#[derive(Debug)]
+pub struct Transition {
+    pub time: f64,
+    pub origin: usize,
+    pub destination: usize
+}
+
+#[derive(Debug)]
 pub enum TransitionError {
     NoExitFound,
     NoTransitionFound,
@@ -14,7 +22,7 @@ pub enum TransitionError {
 pub struct QNet {
     pub number_of_queues: usize,
     pub queues: Vec<Box<Queue>>,
-    pub transitions: Vec<Option<Transition>>,
+    pub transitions: Vec<Option<TransitionFunc>>,
     pub time: f64
 }
 
@@ -37,7 +45,7 @@ impl QNet {
         self.number_of_queues-1
     }
 
-    pub fn add_transition(&mut self, queue: usize, trans: Transition)
+    pub fn add_transition(&mut self, queue: usize, trans: TransitionFunc)
     {
         self.transitions[queue] = Some(trans);
     }
@@ -58,7 +66,7 @@ impl QNet {
         queue
     } 
 
-    pub fn make_transition (&mut self) -> Result<(usize,usize),TransitionError>
+    pub fn make_transition (&mut self) -> Result<Transition,TransitionError>
     {
         let mut orig_q = self.number_of_queues;
         let mut next_exit = INFINITY;
@@ -84,7 +92,11 @@ impl QNet {
                         r.add_log_entry(t, (orig_q, dest_q));
                         //println!("Transition: {}->{}", orig_q, dest_q);
                         self.queues[dest_q].arrival(r);
-                        Ok((orig_q, dest_q))
+                        Ok(Transition {
+                            time: t,
+                            origin: orig_q,
+                            destination: dest_q
+                        })
                     }
                 }
             }

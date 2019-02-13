@@ -83,7 +83,7 @@ fn sr_noautoscaling_sim(n_servers: usize, rho: f64)
     // Run simulation
     let mut t = 0.;
     while t < 400. {
-        t = qn.make_transition();
+        t = qn.make_transition().unwrap().time;
     }
     println!("Done");
 
@@ -106,7 +106,7 @@ fn sr_autoscaling_sim(n_servers: usize)
     // Run simulation
     let mut t = 0.;
     while t < 86400. {
-        t = qn.make_transition();
+        t = qn.make_transition().unwrap().time;
     }
     println!("Done");
 

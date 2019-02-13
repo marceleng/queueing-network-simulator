@@ -1,14 +1,10 @@
-use queues::queueing_network::QNet;
+use queues::queueing_network::{QNet,Transition,TransitionError};
 use queues::Queue;
 use queues::request::Request;
 use std::vec::Vec;
-use std::f64::INFINITY;
 use queues::mg1ps::MG1PS;
 use queues::mginf::MGINF;
 use distribution::MutDistribution;
-
-use rand::distributions::{Exp};
-use distribution::{ConstantDistribution};
 
 use rand::Rng;
 
@@ -85,8 +81,6 @@ impl AutoscalingTracker {
 }
 
 
-type Transition = Box<Fn(&Request, &QNet)->usize>;
-
 pub struct AutoscalingQNet<T1: 'static+ MutDistribution<f64>+Clone,T2: 'static+ MutDistribution<f64>+Clone> {
     qn: QNet,
     n_servers: usize,
@@ -129,74 +123,42 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
 
     }
 
-    pub fn make_transition (&mut self) -> f64
+    pub fn make_transition (&mut self) -> Result<Transition, TransitionError>
     {
-        let mut orig_q = self.qn.number_of_queues;
-        let mut next_exit = INFINITY;
-        for queue in 0..self.qn.number_of_queues {
-            if let Some((t,_)) = self.qn.queues[queue].read_next_exit() {
-                if t <= next_exit {
-                    next_exit = t;
-                    orig_q = queue;
-                }
-            }
+        let trans = self.qn.make_transition()?;
+
+        let mut scaling_op = ScalingOperation::NOOP;
+        let leave_event = self.autoscaling_tracker.is_some() && (trans.origin == self.pserver_with_tracker);
+        let mut arrival_event = false;
+        if trans.destination == self.pserver_with_tracker && self.autoscaling_tracker.is_some() {
+            arrival_event = true;
         }
 
+        let mut load_before_event = self.qn.queues[self.pserver_with_tracker].read_load();
+        if leave_event {
+            load_before_event += 1;
+        } else if arrival_event {
+            load_before_event -= 1;
+        }
 
-        if orig_q < self.qn.number_of_queues {
-            if let Some((t,mut r)) = self.qn.queues[orig_q].pop_next_exit() {
-                self.qn.time = t;
-                //TODO: figure out how to use iterator instead
-                for queue in 0..self.qn.number_of_queues {
-                    self.qn.queues[queue].update_time(t)
-                }
-                let mut dest_q : Option<usize> = None;
-                match self.qn.transitions[orig_q] {
-                    None => println!("{} exits at t={}", r.get_id(), t),
-                    Some(ref f) => {
-                        let _dest_q = f(&r, &self.qn);
-                        r.add_log_entry(t, (orig_q, _dest_q));
-                        //println!("Transition: {}->{}", orig_q, _dest_q);
-                        self.qn.queues[_dest_q].arrival(r);
-                        dest_q = Some(_dest_q);
-
-                    }
-                }
-                let mut scaling_op = ScalingOperation::NOOP;
-                let leave_event = self.autoscaling_tracker.is_some() && (orig_q == self.pserver_with_tracker);
-                let mut arrival_event = false;
-                if let Some(_dest_q) = dest_q {
-                    if _dest_q == self.pserver_with_tracker && self.autoscaling_tracker.is_some() {
-                        arrival_event = true;
-                    }
-                }
-
-                let mut load_before_event = self.qn.queues[self.pserver_with_tracker].read_load();
-                if leave_event {
-                    load_before_event += 1;
-                } else if arrival_event {
-                    load_before_event -= 1;
-                }
-
-                if leave_event || arrival_event {
-                    if let Some(ref mut tracker) = self.autoscaling_tracker {
-                        scaling_op = tracker.update(t, load_before_event);
-                    }
-                }
-                match scaling_op {
-                    ScalingOperation::UPSCALING => { 
-                        println!("t {} upscale_to {}", t, self.n_servers + 1); 
-                        self.add_server() 
-                    },
-                    ScalingOperation::DOWNSCALING => { 
-                        println!("t {} downscale_to {}", t, self.n_servers - 1); 
-                        self.remove_server() 
-                    },
-                    ScalingOperation::NOOP => ()
-                }
+        if leave_event || arrival_event {
+            if let Some(ref mut tracker) = self.autoscaling_tracker {
+                scaling_op = tracker.update(trans.time, load_before_event);
             }
         }
-        next_exit
+        match scaling_op {
+            ScalingOperation::UPSCALING => { 
+                println!("t {} upscale_to {}", trans.time, self.n_servers + 1); 
+                self.add_server() 
+            },
+            ScalingOperation::DOWNSCALING => { 
+                println!("t {} downscale_to {}", trans.time, self.n_servers - 1); 
+                self.remove_server() 
+            },
+            ScalingOperation::NOOP => ()
+        }
+
+        Ok(trans)
     }
 
     fn update_network(&mut self)

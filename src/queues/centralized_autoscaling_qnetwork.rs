@@ -34,21 +34,19 @@ pub struct CentralizedAutoscalingQNet<T1: 'static+ MutDistribution<f64>+Clone,T2
 }
 
 impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDistribution<f64>+Clone {
-    pub fn new 
-    (traffic_source: Box<Queue>, 
-        file_logger: Box<Queue>, 
-        _n_servers: usize, 
-        _link_distribution: T1, 
-        _server_distribution: T2, 
-        _lb_policy: CentralizedLBPolicy
-    ) -> Self {
+    pub fn new (traffic_source: Box<Queue>, 
+                file_logger: Box<Queue>, 
+                _n_servers: usize, 
+                _link_distribution: T1, 
+                _server_distribution: T2, 
+                _lb_policy: CentralizedLBPolicy) -> Self {
         let n = 0;
         let mut _qn = QNet::new();
         let _ptraffic_source = _qn.add_queue(traffic_source);
         let _pfile_logger = _qn.add_queue(file_logger);
         let mut ret = CentralizedAutoscalingQNet {
             qn : _qn,
-            n_servers: _n_servers,
+            n_servers: 0,
             ptraffic_source: _ptraffic_source,
             pfile_logger: _pfile_logger,
             pservers: vec![0 as usize; n],
@@ -57,7 +55,7 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
             link_distribution: _link_distribution.clone(),
             server_distribution: _server_distribution.clone()
         };
-        for _i in 0..ret.n_servers {
+        for _i in 0.._n_servers {
             ret.add_server();
         }
         ret
@@ -101,7 +99,7 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
         next_exit
     }
 
-    fn do_autoscale(&mut self) 
+    fn setup_autoscale(&mut self) 
     {
         //TODO fill me!
     }
@@ -201,7 +199,7 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
             self.pservers[self.n_servers - 1] = self.qn.change_queue(self.pservers[self.n_servers - 1], Box::new(MG1PS::new(1., self.server_distribution.clone())));
         }
 
-        self.do_autoscale();
+        self.setup_autoscale();
         self.update_network();   
 
         //println!("n_servers = {}", self.n_servers);
@@ -215,7 +213,7 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
             self.n_servers -= 1;
 
             if self.n_servers > 0 {
-                self.do_autoscale();    
+                self.setup_autoscale();    
             }
 
             self.update_network();

@@ -35,6 +35,10 @@ impl<T> Distribution<T> for ConstantDistribution<T> where T: Copy {
     }
 }
 
+impl<T> Clone for ConstantDistribution<T> where T: Copy {
+    fn clone(&self) -> Self {  ConstantDistribution { value: self.value }  }
+}
+
 pub struct OffsetExp {
     exp: Exp,
     offset: f64

@@ -8,6 +8,7 @@ pub mod zipfgen;
 pub mod generator;
 pub mod queueing_network;
 pub mod autoscaling_qnetwork;
+pub mod centralized_autoscaling_qnetwork;
 pub mod file_logger;
 pub mod passthrough;
 

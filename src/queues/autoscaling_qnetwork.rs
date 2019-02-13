@@ -28,15 +28,15 @@ struct AutoscalingTracker {
 }
 
 impl AutoscalingTracker {
-    fn new(_downscale_threshold: f64, _upscale_threshold: f64, _ewma_window_len: f64) -> Self {
+    fn new(_downscale_threshold: f64, pe_start: f64, _upscale_threshold: f64, _ewma_window_len: f64) -> Self {
         AutoscalingTracker {
             last_event_time: -1.,
             num_events: 0,
-            proba_empty_ewma: 0.6,
+            proba_empty_ewma: pe_start,
             ewma_window_len: _ewma_window_len,
             upscale_threshold: _upscale_threshold,
             downscale_threshold: _downscale_threshold,
-            did_request_scaling: false
+            did_request_scaling: false,
         }
     }
 
@@ -72,10 +72,10 @@ impl AutoscalingTracker {
         //println!("time={}, last_time={}, load={}, ewma={}", time, self.last_event_time, load, self.proba_empty_ewma);
         self.last_event_time = time;
         self.num_events += 1;
-        if self.proba_empty_ewma > self.downscale_threshold && self.num_events >= 50 && !self.did_request_scaling { 
+        if self.proba_empty_ewma > self.downscale_threshold && self.num_events >= 100 && !self.did_request_scaling { 
             self.did_request_scaling = true;
             ScalingOperation::DOWNSCALING 
-        } else if self.proba_empty_ewma < self.upscale_threshold && self.num_events >= 50 && !self.did_request_scaling { 
+        } else if self.proba_empty_ewma < self.upscale_threshold && self.num_events >= 100 && !self.did_request_scaling { 
             self.did_request_scaling = true;           
             ScalingOperation::UPSCALING 
         } else { 
@@ -242,7 +242,7 @@ impl AutoscalingQNet {
         let downscale_threshold = AutoscalingTracker::downscale_threshold(pe, self.n_servers);
         let upscale_threshold = AutoscalingTracker::upscale_threshold(pe, self.n_servers); 
         let ewma_len = 30.; //FIXME take 300 times E[service time]
-        self.autoscaling_tracker = Some(AutoscalingTracker::new(downscale_threshold, upscale_threshold, ewma_len));     
+        self.autoscaling_tracker = Some(AutoscalingTracker::new(downscale_threshold, pe, upscale_threshold, ewma_len));     
         self.pserver_with_tracker = self.pservers[self.n_servers - 1];  
     }
 

@@ -70,13 +70,10 @@ fn centralized_autoscaling_sim(n_servers: usize)
 
 
 pub fn run_autoscaling (_: env::Args) {
-    /*
-
-
     let mut rho = 4.;
     while rho <= 40. {
         centralized_noautoscaling_sim(40, rho);
         rho += 5.;
     }
-    */
+
 }

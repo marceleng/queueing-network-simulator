@@ -87,7 +87,7 @@ impl AutoscalingTracker {
 
 type Transition = Box<Fn(&Request, &QNet)->usize>;
 
-pub struct AutoscalingQNet {
+pub struct AutoscalingQNet<T1: 'static+ MutDistribution<f64>+Clone,T2: 'static+ MutDistribution<f64>+Clone> {
     qn: QNet,
     n_servers: usize,
     ptraffic_source: usize,
@@ -95,16 +95,22 @@ pub struct AutoscalingQNet {
     pservers: Vec<usize>,
     pnetwork_arcs: Vec<usize>,
     autoscaling_tracker: Option<AutoscalingTracker>,
-    pserver_with_tracker: usize
+    pserver_with_tracker: usize,
+    link_distribution: T1,
+    server_distribution: T2    
 }
 
-impl AutoscalingQNet {
-    pub fn new (traffic_source: Box<Queue>, file_logger: Box<Queue>) -> Self {
+impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDistribution<f64>+Clone {
+    pub fn new (traffic_source: Box<Queue>, 
+                file_logger: Box<Queue>,        
+                _n_servers: usize, 
+                _link_distribution: T1, 
+                _server_distribution: T2) -> Self {
         let n = 0;
         let mut _qn = QNet::new();
         let _ptraffic_source = _qn.add_queue(traffic_source);
         let _pfile_logger = _qn.add_queue(file_logger);
-        AutoscalingQNet {
+        let mut ret = AutoscalingQNet {
             qn : _qn,
             n_servers: 0,
             ptraffic_source: _ptraffic_source,
@@ -112,8 +118,15 @@ impl AutoscalingQNet {
             pservers: vec![0 as usize; n],
             pnetwork_arcs: vec![0 as usize; n],
             autoscaling_tracker: None,
-            pserver_with_tracker: 0 as usize
+            pserver_with_tracker: 0 as usize,
+            link_distribution: _link_distribution,
+            server_distribution: _server_distribution
+        };
+        for _i in 0.._n_servers {
+            ret.add_server();
         }
+        ret        
+
     }
 
     pub fn make_transition (&mut self) -> f64
@@ -173,7 +186,7 @@ impl AutoscalingQNet {
                 match scaling_op {
                     ScalingOperation::UPSCALING => { 
                         println!("t {} upscale_to {}", t, self.n_servers + 1); 
-                        self.add_server(ConstantDistribution::new(/*0.000_200*/0.000_000), /* Exp::new(mu)*/ConstantDistribution::new(1./10.)) 
+                        self.add_server() 
                     },
                     ScalingOperation::DOWNSCALING => { 
                         println!("t {} downscale_to {}", t, self.n_servers - 1); 
@@ -236,7 +249,7 @@ impl AutoscalingQNet {
         }
     }
 
-    fn do_autoscale(&mut self)
+    fn setup_autoscale(&mut self)
     {
         let pe = 0.6;
         let downscale_threshold = AutoscalingTracker::downscale_threshold(pe, self.n_servers);
@@ -246,7 +259,7 @@ impl AutoscalingQNet {
         self.pserver_with_tracker = self.pservers[self.n_servers - 1];  
     }
 
-    pub fn add_server<T1: 'static+ MutDistribution<f64>,T2: 'static+ MutDistribution<f64>>(&mut self, link_distribution: T1, server_distribution: T2)
+    fn add_server(&mut self)
     {
         if self.pservers.len() != self.pnetwork_arcs.len() {
             panic!("|pserver| != |pnetwork_arcs| while adding server!");
@@ -257,9 +270,9 @@ impl AutoscalingQNet {
         if self.pservers.len() < self.n_servers {
             /* Add new slot in vector if not existing */
             // Link { server n-1 [or src] } -> server n
-            self.pnetwork_arcs.push(self.qn.add_queue(Box::new(MGINF::new(1., link_distribution))));
+            self.pnetwork_arcs.push(self.qn.add_queue(Box::new(MGINF::new(1., self.link_distribution.clone()))));
             // Server n
-            self.pservers.push(self.qn.add_queue(Box::new(MG1PS::new(1., server_distribution))));
+            self.pservers.push(self.qn.add_queue(Box::new(MG1PS::new(1., self.server_distribution.clone()))));
 
             if self.pservers.len() != self.n_servers {
                 panic!("|pserver| != n_servers after adding server!");
@@ -267,18 +280,18 @@ impl AutoscalingQNet {
         } else {
             /* Reuse slot in vector if already existing */
             // Link { server n-1 [or src] } -> server n
-            self.pnetwork_arcs[self.n_servers - 1] = self.qn.change_queue(self.pnetwork_arcs[self.n_servers - 1], Box::new(MGINF::new(1., link_distribution)));
+            self.pnetwork_arcs[self.n_servers - 1] = self.qn.change_queue(self.pnetwork_arcs[self.n_servers - 1], Box::new(MGINF::new(1., self.link_distribution.clone())));
             // Server n
-            self.pservers[self.n_servers - 1] = self.qn.change_queue(self.pservers[self.n_servers - 1], Box::new(MG1PS::new(1., server_distribution)));
+            self.pservers[self.n_servers - 1] = self.qn.change_queue(self.pservers[self.n_servers - 1], Box::new(MG1PS::new(1., self.server_distribution.clone())));
         }
 
-        self.do_autoscale();
+        self.setup_autoscale();
         self.update_network();   
 
         //println!("n_servers = {}", self.n_servers);
     }
 
-    pub fn remove_server(&mut self) {
+    fn remove_server(&mut self) {
         // We don't actually perform removal of the queues, so that they can flush naturally
         // However, we update the network so that no transition points to those queues
 
@@ -286,7 +299,7 @@ impl AutoscalingQNet {
             self.n_servers -= 1;
 
             if self.n_servers > 0 {
-                self.do_autoscale();    
+                self.setup_autoscale();    
             }
 
             self.update_network();

@@ -173,7 +173,7 @@ fn run_sim(mode: Filter, s_cachec: usize) {
         res = qn.make_transition();
     }
     match res.unwrap_err() {
-        TransitionError::NoExitFound => println!("Done"),
+        TransitionError::NoExitFound(_) => println!("Done"),
         _ => panic!("Unexpected error")
     };
 }

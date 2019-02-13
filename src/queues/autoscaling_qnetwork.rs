@@ -1,6 +1,5 @@
 use queues::queueing_network::{QNet,Transition,TransitionError};
 use queues::Queue;
-use queues::request::Request;
 use std::vec::Vec;
 use queues::mg1ps::MG1PS;
 use queues::mginf::MGINF;
@@ -242,9 +241,13 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
         } else {
             /* Reuse slot in vector if already existing */
             // Link { server n-1 [or src] } -> server n
-            self.pnetwork_arcs[self.n_servers - 1] = self.qn.change_queue(self.pnetwork_arcs[self.n_servers - 1], Box::new(MGINF::new(1., self.link_distribution.clone())));
+            self.pnetwork_arcs[self.n_servers - 1] =
+                self.qn.change_queue(self.pnetwork_arcs[self.n_servers - 1],
+                                     Box::new(MGINF::new(1., self.link_distribution.clone())));
             // Server n
-            self.pservers[self.n_servers - 1] = self.qn.change_queue(self.pservers[self.n_servers - 1], Box::new(MG1PS::new(1., self.server_distribution.clone())));
+            self.pservers[self.n_servers - 1] =
+                self.qn.change_queue(self.pservers[self.n_servers - 1],
+                                     Box::new(MG1PS::new(1., self.server_distribution.clone())));
         }
 
         self.setup_autoscale();

@@ -5,6 +5,7 @@ use std::f64::INFINITY;
 
 type TransitionFunc = Box<Fn(&Request, &QNet)->usize>;
 
+
 #[derive(Debug)]
 pub struct Transition {
     pub time: f64,
@@ -14,8 +15,8 @@ pub struct Transition {
 
 #[derive(Debug)]
 pub enum TransitionError {
-    NoExitFound,
-    NoTransitionFound,
+    NoExitFound(usize),
+    NoTransitionFound(usize),
     UnknownError
 }
 
@@ -86,7 +87,7 @@ impl QNet {
             if let Some((t,mut r)) = self.queues[orig_q].pop_next_exit() {
                 self.time = t;
                 match self.transitions[orig_q] {
-                    None => Err(TransitionError::NoTransitionFound),
+                    None => Err(TransitionError::NoTransitionFound(orig_q)),
                     Some(ref f) => { 
                         let dest_q = f(&r, &self);
                         r.add_log_entry(t, (orig_q, dest_q));
@@ -105,7 +106,7 @@ impl QNet {
             }
         }
         else {
-            Err(TransitionError::NoExitFound)
+            Err(TransitionError::NoExitFound(orig_q))
         }
     }
 

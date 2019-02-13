@@ -11,7 +11,6 @@ use queues::cm_poisson_generator::ContinuouslyModulatedPoissonGenerator;
 
 
 use rand::distributions::{Exp};
-use rand::distributions::Distribution;
 use distribution::{ConstantDistribution};
 
 use queues::autoscaling_qnetwork::AutoscalingQNet;
@@ -37,7 +36,7 @@ fn centralized_noautoscaling_sim(n_servers: usize, rho: f64)
     // Run simulation
     let mut t = 0.;
     while t < 400. {
-        t = qn.make_transition();
+        t = qn.make_transition().unwrap().time;
     }
     println!("Done");
 
@@ -61,7 +60,7 @@ fn centralized_autoscaling_sim(n_servers: usize)
     // Run simulation
     let mut t = 0.;
     while t < 86400. {
-        t = qn.make_transition();
+        t = qn.make_transition().unwrap().time;
     }
     println!("Done");
 

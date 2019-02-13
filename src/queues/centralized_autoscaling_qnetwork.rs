@@ -1,24 +1,72 @@
-use queues::queueing_network::QNet;
-use queues::Queue;
-use queues::request::Request;
 use std::vec::Vec;
-use std::f64::INFINITY;
+use std::io::BufReader;
+use std::io::BufRead;
+use std::fs::File;
+
+use queues::queueing_network::{QNet,Transition,TransitionError};
+use queues::Queue;
 use queues::mg1ps::MG1PS;
 use queues::mginf::MGINF;
+
+use queues::request::Request;
+
 use distribution::MutDistribution;
 
-use rand::distributions::{Exp};
-use distribution::{ConstantDistribution};
-
+use float_binaryheap::FloatBinaryHeap;
 use rand::Rng;
-
-
-type Transition = Box<Fn(&Request, &QNet)->usize>;
 
 pub enum CentralizedLBPolicy {
     RND,
     JSQ2,
     JIQ
+}
+
+struct ScalingSchedule(FloatBinaryHeap<usize>, Option<(f64,Request)>);
+
+impl ScalingSchedule {
+
+    pub fn from_csv (filename: &'static str, delimiter: char) -> Self {
+        let mut ret = ScalingSchedule {
+            0: FloatBinaryHeap::new(),
+            1: None
+        };
+
+        let sched_csv = File::open(filename).unwrap();
+        let buf_read = BufReader::new(sched_csv);
+
+        for line in buf_read.lines() {
+            let l = line.unwrap();
+            let mut s = l.split(delimiter);
+            let t = s.next().unwrap().parse().unwrap();
+            let n = s.next().unwrap().parse().unwrap();
+            ret.0.push(t,n);
+        }
+
+        // Let's initialize ret.1
+        ret.pop_next_exit();
+        ret
+    }
+}
+
+impl Queue for ScalingSchedule {
+    fn arrival        (&mut self, _: Request) { panic!("You should not arrive in this queue"); }
+
+    fn update_time    (&mut self, _time: f64) {}
+
+    fn read_next_exit (&self) -> Option<(f64,&Request)> {
+        match self.1 {
+            None=>None,
+            Some((t, ref r)) => Some((t,r))
+        }
+    }
+
+    fn pop_next_exit  (&mut self) -> Option<(f64,Request)> {
+        let ret = self.1.take();
+        self.1 = self.0.pop().map( |(t,n)| (t, Request::new(n)));
+        ret
+    }
+
+    fn read_load	  (&self) -> usize { 1 }
 }
 
 pub struct CentralizedAutoscalingQNet<T1: 'static+ MutDistribution<f64>+Clone,T2: 'static+ MutDistribution<f64>+Clone> {
@@ -29,16 +77,18 @@ pub struct CentralizedAutoscalingQNet<T1: 'static+ MutDistribution<f64>+Clone,T2
     pservers: Vec<usize>,
     pnetwork_arcs: Vec<usize>,
     lb_policy: CentralizedLBPolicy,
+    scaling_schedule: ScalingSchedule,
     link_distribution: T1,
     server_distribution: T2
 }
 
 impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDistribution<f64>+Clone {
-    pub fn new (traffic_source: Box<Queue>, 
-                file_logger: Box<Queue>, 
-                _n_servers: usize, 
-                _link_distribution: T1, 
-                _server_distribution: T2, 
+    pub fn new (traffic_source: Box<Queue>,
+                file_logger: Box<Queue>,
+                _n_servers: usize,
+                //schedule_csv: &'static str,
+                _link_distribution: T1,
+                _server_distribution: T2,
                 _lb_policy: CentralizedLBPolicy) -> Self {
         let n = 0;
         let mut _qn = QNet::new();
@@ -52,6 +102,7 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
             pservers: vec![0 as usize; n],
             pnetwork_arcs: vec![0 as usize; n],
             lb_policy: _lb_policy,
+            scaling_schedule: ScalingSchedule::from_csv("schedule.csv", ' '), // TODO: as function arg
             link_distribution: _link_distribution.clone(),
             server_distribution: _server_distribution.clone()
         };
@@ -62,67 +113,36 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
     }
 
 
-    pub fn make_transition (&mut self) -> f64
+    pub fn make_transition (&mut self) -> Result<Transition, TransitionError>
     {
-        let mut orig_q = self.qn.number_of_queues;
-        let mut next_exit = INFINITY;
-        for queue in 0..self.qn.number_of_queues {
-            if let Some((t,_)) = self.qn.queues[queue].read_next_exit() {
-                if t <= next_exit {
-                    next_exit = t;
-                    orig_q = queue;
-                }
-            }
-        }
-
-
-        if orig_q < self.qn.number_of_queues {
-            if let Some((t,mut r)) = self.qn.queues[orig_q].pop_next_exit() {
-                self.qn.time = t;
-                //TODO: figure out how to use iterator instead
-                for queue in 0..self.qn.number_of_queues {
-                    self.qn.queues[queue].update_time(t)
-                }
-                match self.qn.transitions[orig_q] {
-                    None => println!("{} exits at t={}", r.get_id(), t),
-                    Some(ref f) => {
-                        let _dest_q = f(&r, &self.qn);
-                        r.add_log_entry(t, (orig_q, _dest_q));
-                        //println!("Transition: {}->{}", orig_q, _dest_q);
-                        self.qn.queues[_dest_q].arrival(r);
-
-                    }
-                }
-
-            }
-        }
-        next_exit
+        self.qn.make_transition()
     }
 
-    fn setup_autoscale(&mut self) 
+    fn setup_autoscale(&mut self)
     {
-        //TODO fill me!
+        //TODO: use this to create the ScalingSchedule queue and a transition function that
+        //enforces the scaling schedule
     }
     fn update_network(&mut self)
     {
         let last_server_idx = self.n_servers - 1;
 
         if self.n_servers >= 1 {
-            // Transition src -> link(src, server $rand) 
+            // Transition src -> link(src, server $rand)
             {
                 let source = self.ptraffic_source;
-                let dests = self.pnetwork_arcs.clone();  
+                let dests = self.pnetwork_arcs.clone();
                 let servers = self.pservers.clone();
                 let n_servers = self.n_servers;
 
                 //NB: the following removes stale transitions as well, since we use a new version of pnetwork_arcs
                 match self.lb_policy {
-                    CentralizedLBPolicy::RND => 
-                        self.qn.add_transition(source, Box::new(move |ref _req, ref _qn| { 
+                    CentralizedLBPolicy::RND =>
+                        self.qn.add_transition(source, Box::new(move |ref _req, ref _qn| {
                             dests[rand::thread_rng().gen_range(0, n_servers)]
                         })),
-                    CentralizedLBPolicy::JSQ2 => 
-                        self.qn.add_transition(source, Box::new(move |ref _req, ref qn| { 
+                    CentralizedLBPolicy::JSQ2 =>
+                        self.qn.add_transition(source, Box::new(move |ref _req, ref qn| {
                             let choice_1 = servers[rand::thread_rng().gen_range(0, n_servers)];
                             let choice_2 = servers[rand::thread_rng().gen_range(0, n_servers)];
                             let load_1 = qn.get_queue(choice_1).read_load();
@@ -135,7 +155,7 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
 
                         })),
                     CentralizedLBPolicy::JIQ =>
-                        self.qn.add_transition(source, Box::new(move |ref _req, ref qn| { 
+                        self.qn.add_transition(source, Box::new(move |ref _req, ref qn| {
                             // Join an idle queue...
                             for i in 0..n_servers {
                                 if qn.get_queue(i).read_load() == 0 {
@@ -144,9 +164,9 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
                             }
                             // ... or go to a random one, if none is available
                             dests[rand::thread_rng().gen_range(0, n_servers)]
-                        }))                                          
+                        }))
                 }
-                
+
             }
 
             // Transition link(src, server n) -> server(n)
@@ -200,7 +220,7 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
         }
 
         self.setup_autoscale();
-        self.update_network();   
+        self.update_network();
 
         //println!("n_servers = {}", self.n_servers);
     }
@@ -213,7 +233,7 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
             self.n_servers -= 1;
 
             if self.n_servers > 0 {
-                self.setup_autoscale();    
+                self.setup_autoscale();
             }
 
             self.update_network();

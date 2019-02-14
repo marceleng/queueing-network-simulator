@@ -86,10 +86,10 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
     pub fn new (traffic_source: Box<Queue>,
                 file_logger: Box<Queue>,
                 _n_servers: usize,
-                //schedule_csv: &'static str,
                 _link_distribution: T1,
                 _server_distribution: T2,
-                _lb_policy: CentralizedLBPolicy) -> Self {
+                _lb_policy: CentralizedLBPolicy,
+                _autoscaling_policy: Option<(&'static str, char)>) -> Self {
         let n = 0;
         let mut _qn = QNet::new();
         let _ptraffic_source = _qn.add_queue(traffic_source);
@@ -108,6 +108,9 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
         };
         for _i in 0.._n_servers {
             ret.add_server();
+        }
+        if let Some((filename, delimiter)) = _autoscaling_policy {
+            ret.setup_autoscale(filename, delimiter);
         }
         ret
     }
@@ -140,10 +143,10 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
             
     }
 
-    fn setup_autoscale(&mut self)
+    fn setup_autoscale(&mut self, filename: &'static str, delimiter: char)
     {
         //TODO: pass the file as an argument or in struct members
-        self.scaling_queue = self.qn.add_queue(Box::new(ScalingSchedule::from_csv("schedule.csv", ' ')));
+        self.scaling_queue = self.qn.add_queue(Box::new(ScalingSchedule::from_csv(filename, delimiter)));
         //std::usize::MAX makes sure that we raise an Error in make_transition()
         self.qn.add_transition(self.scaling_queue, Box::new(|_,_| std::usize::MAX));
     }

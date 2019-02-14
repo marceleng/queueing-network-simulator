@@ -31,7 +31,8 @@ fn centralized_noautoscaling_sim(n_servers: usize, rho: f64)
                                       n_servers,
                                       ConstantDistribution::new(tau_network),
                                       Exp::new(mu),
-                                      CentralizedLBPolicy::RND);
+                                      CentralizedLBPolicy::RND,
+                                      None);
 
 
     // Run simulation
@@ -55,7 +56,8 @@ fn centralized_autoscaling_sim(n_servers: usize)
                                       n_servers,
                                       ConstantDistribution::new(tau_network),
                                       Exp::new(mu),
-                                      CentralizedLBPolicy::RND);
+                                      CentralizedLBPolicy::RND,
+                                      Some(("schedule.csv", ' ')) );
 
 
     // Run simulation
@@ -77,7 +79,8 @@ fn sr_noautoscaling_sim(n_servers: usize, rho: f64)
                                       Box::new(FileLogger::new(1024, &format!("results/results_sr_{:.2}.csv", rho))),
                                       n_servers,
                                       ConstantDistribution::new(tau_network),
-                                      Exp::new(mu));
+                                      Exp::new(mu),
+                                      false);
 
 
     // Run simulation
@@ -100,7 +103,8 @@ fn sr_autoscaling_sim(n_servers: usize)
                                       Box::new(FileLogger::new(1024, "results/results_sr_autoscale.csv")),
                                       n_servers,
                                       ConstantDistribution::new(tau_network),
-                                      Exp::new(mu));
+                                      Exp::new(mu),
+                                      true);
 
 
     // Run simulation

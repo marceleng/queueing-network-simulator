@@ -90,32 +90,35 @@ pub struct AutoscalingQNet<T1: 'static+ MutDistribution<f64>+Clone,T2: 'static+ 
     autoscaling_tracker: Option<AutoscalingTracker>,
     pserver_with_tracker: usize,
     link_distribution: T1,
-    server_distribution: T2
+    server_distribution: T2,
+    do_autoscale: bool
 }
 
 impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDistribution<f64>+Clone {
     pub fn new (traffic_source: Box<Queue>,
                 file_logger: Box<Queue>,
-                _n_servers: usize,
-                _link_distribution: T1,
-                _server_distribution: T2) -> Self {
+                n_servers: usize,
+                link_distribution: T1,
+                server_distribution: T2,
+                do_autoscale: bool) -> Self {
         let n = 0;
-        let mut _qn = QNet::new();
-        let _ptraffic_source = _qn.add_queue(traffic_source);
-        let _pfile_logger = _qn.add_queue(file_logger);
+        let mut qn = QNet::new();
+        let ptraffic_source = qn.add_queue(traffic_source);
+        let pfile_logger = qn.add_queue(file_logger);
         let mut ret = AutoscalingQNet {
-            qn : _qn,
+            qn,
             n_servers: 0,
-            ptraffic_source: _ptraffic_source,
-            pfile_logger: _pfile_logger,
+            ptraffic_source,
+            pfile_logger,
             pservers: vec![0 as usize; n],
             pnetwork_arcs: vec![0 as usize; n],
             autoscaling_tracker: None,
             pserver_with_tracker: 0 as usize,
-            link_distribution: _link_distribution,
-            server_distribution: _server_distribution
+            link_distribution,
+            server_distribution,
+            do_autoscale
         };
-        for _i in 0.._n_servers {
+        for _i in 0..n_servers {
             ret.add_server();
         }
         ret
@@ -209,12 +212,14 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
 
     fn setup_autoscale(&mut self)
     {
-        let pe = 0.6;
-        let downscale_threshold = AutoscalingTracker::downscale_threshold(pe, self.n_servers);
-        let upscale_threshold = AutoscalingTracker::upscale_threshold(pe, self.n_servers);
-        let ewma_len = 30.; //FIXME take 300 times E[service time]
-        self.autoscaling_tracker = Some(AutoscalingTracker::new(downscale_threshold, pe, upscale_threshold, ewma_len));
-        self.pserver_with_tracker = self.pservers[self.n_servers - 1];
+        if self.do_autoscale {
+            let pe = 0.6;
+            let downscale_threshold = AutoscalingTracker::downscale_threshold(pe, self.n_servers);
+            let upscale_threshold = AutoscalingTracker::upscale_threshold(pe, self.n_servers);
+            let ewma_len = 30.; //FIXME take 300 times E[service time]
+            self.autoscaling_tracker = Some(AutoscalingTracker::new(downscale_threshold, pe, upscale_threshold, ewma_len));
+            self.pserver_with_tracker = self.pservers[self.n_servers - 1];
+        }
     }
 
     fn add_server(&mut self)

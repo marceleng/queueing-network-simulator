@@ -10,13 +10,15 @@ type TransitionFunc = Box<Fn(&Request, &QNet)->usize>;
 pub struct Transition {
     pub time: f64,
     pub origin: usize,
-    pub destination: usize
+    pub destination: usize,
+    pub request: usize,
 }
 
 #[derive(Debug)]
 pub enum TransitionError {
     NoExitFound(usize),
     NoTransitionFound(usize),
+    DestinationOutOfBound(Transition),
     UnknownError
 }
 
@@ -90,14 +92,21 @@ impl QNet {
                     None => Err(TransitionError::NoTransitionFound(orig_q)),
                     Some(ref f) => { 
                         let dest_q = f(&r, &self);
-                        r.add_log_entry(t, (orig_q, dest_q));
-                        //println!("Transition: {}->{}", orig_q, dest_q);
-                        self.queues[dest_q].arrival(r);
-                        Ok(Transition {
+                        let ret = Transition {
                             time: t,
                             origin: orig_q,
-                            destination: dest_q
-                        })
+                            destination: dest_q,
+                            request: r.get_content(),
+                        };
+                        if dest_q >= self.queues.len() {
+                            Err(TransitionError::DestinationOutOfBound(ret))
+                        }
+                        else {
+                            r.add_log_entry(t, (orig_q, dest_q));
+                            //println!("Transition: {}->{}", orig_q, dest_q);
+                            self.queues[dest_q].arrival(r);
+                            Ok(ret)
+                        }
                     }
                 }
             }

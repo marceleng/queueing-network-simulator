@@ -77,7 +77,7 @@ pub struct CentralizedAutoscalingQNet<T1: 'static+ MutDistribution<f64>+Clone,T2
     pservers: Vec<usize>,
     pnetwork_arcs: Vec<usize>,
     lb_policy: CentralizedLBPolicy,
-    scaling_schedule: ScalingSchedule,
+    scaling_queue: usize,
     link_distribution: T1,
     server_distribution: T2
 }
@@ -102,7 +102,7 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
             pservers: vec![0 as usize; n],
             pnetwork_arcs: vec![0 as usize; n],
             lb_policy: _lb_policy,
-            scaling_schedule: ScalingSchedule::from_csv("schedule.csv", ' '), // TODO: as function arg
+            scaling_queue: std::usize::MAX,
             link_distribution: _link_distribution.clone(),
             server_distribution: _server_distribution.clone()
         };
@@ -115,14 +115,39 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
 
     pub fn make_transition (&mut self) -> Result<Transition, TransitionError>
     {
-        self.qn.make_transition()
+        let ret = self.qn.make_transition();
+
+        //Let's catch the transitions from the scaling queue
+        if let Err(TransitionError::DestinationOutOfBound(t)) = ret {
+            if t.origin == self.scaling_queue {
+                let goal = t.request;
+                while self.n_servers > goal {
+                    self.remove_server();
+                }
+                while self.n_servers < goal {
+                    self.add_server();
+                }
+
+                Ok(t)
+            }
+            else {
+                Err(TransitionError::DestinationOutOfBound(t))
+            }
+        }
+        else {
+            ret
+        }
+            
     }
 
     fn setup_autoscale(&mut self)
     {
-        //TODO: use this to create the ScalingSchedule queue and a transition function that
-        //enforces the scaling schedule
+        //TODO: pass the file as an argument or in struct members
+        self.scaling_queue = self.qn.add_queue(Box::new(ScalingSchedule::from_csv("schedule.csv", ' ')));
+        //std::usize::MAX makes sure that we raise an Error in make_transition()
+        self.qn.add_transition(self.scaling_queue, Box::new(|_,_| std::usize::MAX));
     }
+
     fn update_network(&mut self)
     {
         let last_server_idx = self.n_servers - 1;
@@ -219,7 +244,6 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
             self.pservers[self.n_servers - 1] = self.qn.change_queue(self.pservers[self.n_servers - 1], Box::new(MG1PS::new(1., self.server_distribution.clone())));
         }
 
-        self.setup_autoscale();
         self.update_network();
 
         //println!("n_servers = {}", self.n_servers);
@@ -231,10 +255,6 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
 
         if self.n_servers > 0 {
             self.n_servers -= 1;
-
-            if self.n_servers > 0 {
-                self.setup_autoscale();
-            }
 
             self.update_network();
         }

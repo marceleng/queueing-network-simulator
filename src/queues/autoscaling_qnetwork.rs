@@ -35,7 +35,7 @@ impl AutoscalingTracker {
         }
     }
 
-    fn fact(n: f64) -> f64 
+    fn fact(n: f64) -> f64
     {
         if (n.abs() < 0.1) || ((n - 1.).abs() < 0.1) { 1. } else { n * Self::fact(n - 1.) }
     }
@@ -67,14 +67,14 @@ impl AutoscalingTracker {
         //println!("time={}, last_time={}, load={}, ewma={}", time, self.last_event_time, load, self.proba_empty_ewma);
         self.last_event_time = time;
         self.num_events += 1;
-        if self.proba_empty_ewma > self.downscale_threshold && self.num_events >= 100 && !self.did_request_scaling { 
+        if self.proba_empty_ewma > self.downscale_threshold && self.num_events >= 100 && !self.did_request_scaling {
             self.did_request_scaling = true;
-            ScalingOperation::DOWNSCALING 
-        } else if self.proba_empty_ewma < self.upscale_threshold && self.num_events >= 100 && !self.did_request_scaling { 
-            self.did_request_scaling = true;           
-            ScalingOperation::UPSCALING 
-        } else { 
-            ScalingOperation::NOOP 
+            ScalingOperation::DOWNSCALING
+        } else if self.proba_empty_ewma < self.upscale_threshold && self.num_events >= 100 && !self.did_request_scaling {
+            self.did_request_scaling = true;
+            ScalingOperation::UPSCALING
+        } else {
+            ScalingOperation::NOOP
         }
     }
 }
@@ -90,14 +90,14 @@ pub struct AutoscalingQNet<T1: 'static+ MutDistribution<f64>+Clone,T2: 'static+ 
     autoscaling_tracker: Option<AutoscalingTracker>,
     pserver_with_tracker: usize,
     link_distribution: T1,
-    server_distribution: T2    
+    server_distribution: T2
 }
 
 impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDistribution<f64>+Clone {
-    pub fn new (traffic_source: Box<Queue>, 
-                file_logger: Box<Queue>,        
-                _n_servers: usize, 
-                _link_distribution: T1, 
+    pub fn new (traffic_source: Box<Queue>,
+                file_logger: Box<Queue>,
+                _n_servers: usize,
+                _link_distribution: T1,
                 _server_distribution: T2) -> Self {
         let n = 0;
         let mut _qn = QNet::new();
@@ -118,7 +118,7 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
         for _i in 0.._n_servers {
             ret.add_server();
         }
-        ret        
+        ret
 
     }
 
@@ -128,10 +128,7 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
 
         let mut scaling_op = ScalingOperation::NOOP;
         let leave_event = self.autoscaling_tracker.is_some() && (trans.origin == self.pserver_with_tracker);
-        let mut arrival_event = false;
-        if trans.destination == self.pserver_with_tracker && self.autoscaling_tracker.is_some() {
-            arrival_event = true;
-        }
+        let arrival_event = trans.destination == self.pserver_with_tracker && self.autoscaling_tracker.is_some();
 
         let mut load_before_event = self.qn.queues[self.pserver_with_tracker].read_load();
         if leave_event {
@@ -146,13 +143,13 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
             }
         }
         match scaling_op {
-            ScalingOperation::UPSCALING => { 
-                println!("t {} upscale_to {}", trans.time, self.n_servers + 1); 
-                self.add_server() 
+            ScalingOperation::UPSCALING => {
+                println!("t {} upscale_to {}", trans.time, self.n_servers + 1);
+                self.add_server()
             },
-            ScalingOperation::DOWNSCALING => { 
-                println!("t {} downscale_to {}", trans.time, self.n_servers - 1); 
-                self.remove_server() 
+            ScalingOperation::DOWNSCALING => {
+                println!("t {} downscale_to {}", trans.time, self.n_servers - 1);
+                self.remove_server()
             },
             ScalingOperation::NOOP => ()
         }
@@ -191,8 +188,8 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
                 let potential_dest = self.pservers[last_server_idx];
                 let JIQ = false;
                 if JIQ {
-                    let fallback_dests = self.pservers.clone();  
-                    self.qn.add_transition(source, Box::new(move |ref _req, ref qn| { 
+                    let fallback_dests = self.pservers.clone();
+                    self.qn.add_transition(source, Box::new(move |ref _req, ref qn| {
                         let load = qn.get_queue(potential_dest).read_load();
                         if load == 0 { potential_dest } else { *rand::thread_rng().choose(&fallback_dests).unwrap() }
                     }));
@@ -214,10 +211,10 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
     {
         let pe = 0.6;
         let downscale_threshold = AutoscalingTracker::downscale_threshold(pe, self.n_servers);
-        let upscale_threshold = AutoscalingTracker::upscale_threshold(pe, self.n_servers); 
+        let upscale_threshold = AutoscalingTracker::upscale_threshold(pe, self.n_servers);
         let ewma_len = 30.; //FIXME take 300 times E[service time]
-        self.autoscaling_tracker = Some(AutoscalingTracker::new(downscale_threshold, pe, upscale_threshold, ewma_len));     
-        self.pserver_with_tracker = self.pservers[self.n_servers - 1];  
+        self.autoscaling_tracker = Some(AutoscalingTracker::new(downscale_threshold, pe, upscale_threshold, ewma_len));
+        self.pserver_with_tracker = self.pservers[self.n_servers - 1];
     }
 
     fn add_server(&mut self)
@@ -251,7 +248,7 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
         }
 
         self.setup_autoscale();
-        self.update_network();   
+        self.update_network();
 
         //println!("n_servers = {}", self.n_servers);
     }
@@ -264,7 +261,7 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
             self.n_servers -= 1;
 
             if self.n_servers > 0 {
-                self.setup_autoscale();    
+                self.setup_autoscale();
             }
 
             self.update_network();

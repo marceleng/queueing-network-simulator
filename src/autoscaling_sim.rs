@@ -2,6 +2,7 @@
 #![warn(unused_imports)]
 
 use std::env;
+use std::f64::consts::PI;
 
 extern crate rand;
 extern crate zipf;
@@ -19,16 +20,16 @@ use queues::centralized_autoscaling_qnetwork::CentralizedLBPolicy;
 use queues::file_logger::FileLogger;
 
 
-fn centralized_noautoscaling_sim(n_servers: usize, rho: f64) 
+fn centralized_noautoscaling_sim(n_servers: usize, rho: f64)
 {
     let mu = 1./0.100; //100 ms
     let lambda = rho * mu;
     let tau_network = 0.000_000; //200 μs
 
-    let mut qn = CentralizedAutoscalingQNet::new(Box::new(PoissonGenerator::new(lambda, ConstantDistribution::new(1))), 
-                                      Box::new(FileLogger::new(1024, &format!("results/results_rnd_{:.2}.csv", rho))), 
+    let mut qn = CentralizedAutoscalingQNet::new(Box::new(PoissonGenerator::new(lambda, ConstantDistribution::new(1))),
+                                      Box::new(FileLogger::new(1024, &format!("results/results_rnd_{:.2}.csv", rho))),
                                       n_servers,
-                                      ConstantDistribution::new(tau_network), 
+                                      ConstantDistribution::new(tau_network),
                                       Exp::new(mu),
                                       CentralizedLBPolicy::RND);
 
@@ -42,17 +43,17 @@ fn centralized_noautoscaling_sim(n_servers: usize, rho: f64)
 
 }
 
-fn centralized_autoscaling_sim(n_servers: usize) 
+fn centralized_autoscaling_sim(n_servers: usize)
 {
     let mu = 1./0.100; //100 ms
     let tau_network = 0.000_000; //200 μs
 
     let mut qn = CentralizedAutoscalingQNet::new(Box::new(ContinuouslyModulatedPoissonGenerator::new(
-                                                                Box::new(move |t| mu*(50. - 20.*(2.*3.14159265*t/86400.).cos())), 
-                                                          ConstantDistribution::new(1))), 
-                                      Box::new(FileLogger::new(1024, "results/results_centralized_autoscale.csv")), 
+                                                                Box::new(move |t| mu*(50. - 20.*(2.*PI*t/86400.).cos())),
+                                                          ConstantDistribution::new(1))),
+                                      Box::new(FileLogger::new(1024, "results/results_centralized_autoscale.csv")),
                                       n_servers,
-                                      ConstantDistribution::new(tau_network), 
+                                      ConstantDistribution::new(tau_network),
                                       Exp::new(mu),
                                       CentralizedLBPolicy::RND);
 
@@ -66,16 +67,16 @@ fn centralized_autoscaling_sim(n_servers: usize)
 
 }
 
-fn sr_noautoscaling_sim(n_servers: usize, rho: f64) 
+fn sr_noautoscaling_sim(n_servers: usize, rho: f64)
 {
     let mu = 1./0.100; //100 ms
     let lambda = rho * mu;
     let tau_network = 0.000_000; //200 μs
 
-    let mut qn = AutoscalingQNet::new(Box::new(PoissonGenerator::new(lambda, ConstantDistribution::new(1))), 
-                                      Box::new(FileLogger::new(1024, &format!("results/results_sr_{:.2}.csv", rho))), 
+    let mut qn = AutoscalingQNet::new(Box::new(PoissonGenerator::new(lambda, ConstantDistribution::new(1))),
+                                      Box::new(FileLogger::new(1024, &format!("results/results_sr_{:.2}.csv", rho))),
                                       n_servers,
-                                      ConstantDistribution::new(tau_network), 
+                                      ConstantDistribution::new(tau_network),
                                       Exp::new(mu));
 
 
@@ -88,17 +89,17 @@ fn sr_noautoscaling_sim(n_servers: usize, rho: f64)
 
 }
 
-fn sr_autoscaling_sim(n_servers: usize) 
+fn sr_autoscaling_sim(n_servers: usize)
 {
     let mu = 1./0.100; //100 ms
     let tau_network = 0.000_000; //200 μs
 
     let mut qn = AutoscalingQNet::new(Box::new(ContinuouslyModulatedPoissonGenerator::new(
-                                                                Box::new(move |t| mu*(50. - 20.*(2.*3.14159265*t/86400.).cos())), 
-                                                          ConstantDistribution::new(1))), 
-                                      Box::new(FileLogger::new(1024, "results/results_sr_autoscale.csv")), 
+                                                                Box::new(move |t| mu*(50. - 20.*(2.*PI*t/86400.).cos())),
+                                                          ConstantDistribution::new(1))),
+                                      Box::new(FileLogger::new(1024, "results/results_sr_autoscale.csv")),
                                       n_servers,
-                                      ConstantDistribution::new(tau_network), 
+                                      ConstantDistribution::new(tau_network),
                                       Exp::new(mu));
 
 

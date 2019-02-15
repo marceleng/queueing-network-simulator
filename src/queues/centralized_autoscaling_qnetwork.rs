@@ -171,10 +171,13 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
                         })),
                     CentralizedLBPolicy::JSQ2 =>
                         self.qn.add_transition(source, Box::new(move |ref _req, ref qn| {
-                            let choice_1 = servers[rand::thread_rng().gen_range(0, n_servers)];
-                            let choice_2 = servers[rand::thread_rng().gen_range(0, n_servers)];
-                            let load_1 = qn.get_queue(choice_1).read_load();
-                            let load_2 = qn.get_queue(choice_2).read_load();
+                            let choice_1 = rand::thread_rng().gen_range(0, n_servers);
+                            let mut choice_2 = choice_1;
+                            while choice_2 == choice_1 && n_servers > 1 {
+                                choice_2 = rand::thread_rng().gen_range(0, n_servers);
+                            }
+                            let load_1 = qn.get_queue(servers[choice_1]).read_load();
+                            let load_2 = qn.get_queue(servers[choice_2]).read_load();
                             if load_1 < load_2 {
                                 dests[choice_1]
                             } else {
@@ -186,8 +189,8 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
                         self.qn.add_transition(source, Box::new(move |ref _req, ref qn| {
                             // Join an idle queue...
                             for i in 0..n_servers {
-                                if qn.get_queue(i).read_load() == 0 {
-                                    return i
+                                if qn.get_queue(servers[i]).read_load() == 0 {
+                                    return dests[i]
                                 }
                             }
                             // ... or go to a random one, if none is available

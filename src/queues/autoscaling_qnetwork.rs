@@ -7,10 +7,15 @@ use distribution::MutDistribution;
 
 use rand::Rng;
 
+
 enum ScalingOperation {
     NOOP,
     DOWNSCALING,
     UPSCALING
+}
+pub struct AutoscalingParameters {
+    pub proba_empty: f64,
+    pub ewma_window_len: f64
 }
 struct AutoscalingTracker {
     last_event_time: f64,
@@ -87,11 +92,11 @@ pub struct AutoscalingQNet<T1: 'static+ MutDistribution<f64>+Clone,T2: 'static+ 
     pfile_logger: usize,
     pservers: Vec<usize>,
     pnetwork_arcs: Vec<usize>,
+    autoscaling_parameters: Option<AutoscalingParameters>,    
     autoscaling_tracker: Option<AutoscalingTracker>,
     pserver_with_tracker: usize,
     link_distribution: T1,
     server_distribution: T2,
-    do_autoscale: bool
 }
 
 impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDistribution<f64>+Clone {
@@ -100,7 +105,7 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
                 n_servers: usize,
                 link_distribution: T1,
                 server_distribution: T2,
-                do_autoscale: bool) -> Self {
+                autoscaling_parameters: Option<AutoscalingParameters>) -> Self {
         let n = 0;
         let mut qn = QNet::new();
         let ptraffic_source = qn.add_queue(traffic_source);
@@ -112,11 +117,11 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
             pfile_logger,
             pservers: vec![0 as usize; n],
             pnetwork_arcs: vec![0 as usize; n],
+            autoscaling_parameters,
             autoscaling_tracker: None,
             pserver_with_tracker: 0 as usize,
             link_distribution,
             server_distribution,
-            do_autoscale
         };
         for _i in 0..n_servers {
             ret.add_server();
@@ -212,12 +217,11 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
 
     fn setup_autoscale(&mut self)
     {
-        if self.do_autoscale {
-            let pe = 0.6;
+        if let Some(ref autoscaling_parameters) = self.autoscaling_parameters {
+            let pe = autoscaling_parameters.proba_empty;
             let downscale_threshold = AutoscalingTracker::downscale_threshold(pe, self.n_servers);
             let upscale_threshold = AutoscalingTracker::upscale_threshold(pe, self.n_servers);
-            let ewma_len = 30.; //FIXME take 300 times E[service time]
-            self.autoscaling_tracker = Some(AutoscalingTracker::new(downscale_threshold, pe, upscale_threshold, ewma_len));
+            self.autoscaling_tracker = Some(AutoscalingTracker::new(downscale_threshold, pe, upscale_threshold, autoscaling_parameters.ewma_window_len));
             self.pserver_with_tracker = self.pservers[self.n_servers - 1];
         }
     }

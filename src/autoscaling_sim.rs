@@ -15,6 +15,7 @@ use rand::distributions::{Exp};
 use distribution::{ConstantDistribution};
 
 use queues::autoscaling_qnetwork::AutoscalingQNet;
+use queues::autoscaling_qnetwork::AutoscalingParameters;
 use queues::centralized_autoscaling_qnetwork::CentralizedAutoscalingQNet;
 use queues::centralized_autoscaling_qnetwork::CentralizedLBPolicy;
 use queues::file_logger::FileLogger;
@@ -80,7 +81,7 @@ fn sr_noautoscaling_sim(n_servers: usize, rho: f64)
                                       n_servers,
                                       ConstantDistribution::new(tau_network),
                                       Exp::new(mu),
-                                      false);
+                                      None);
 
 
     // Run simulation
@@ -104,7 +105,7 @@ fn sr_autoscaling_sim(n_servers: usize)
                                       n_servers,
                                       ConstantDistribution::new(tau_network),
                                       Exp::new(mu),
-                                      true);
+                                      Some(AutoscalingParameters{proba_empty: 0.8, ewma_window_len: 100.}));
 
 
     // Run simulation

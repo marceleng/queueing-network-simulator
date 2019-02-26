@@ -4,6 +4,7 @@ pub mod mginf;
 pub mod mgkfifo;
 pub mod poisson_generator;
 pub mod cm_poisson_generator;
+pub mod trace_generator;
 pub mod zipfgen;
 pub mod generator;
 pub mod queueing_network;

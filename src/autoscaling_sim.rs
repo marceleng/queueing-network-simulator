@@ -19,7 +19,7 @@ use queues::autoscaling_qnetwork::AutoscalingParameters;
 use queues::centralized_autoscaling_qnetwork::CentralizedAutoscalingQNet;
 use queues::centralized_autoscaling_qnetwork::CentralizedLBPolicy;
 use queues::file_logger::FileLogger;
-
+use queues::trace_generator::TraceGenerator;
 
 fn centralized_noautoscaling_sim(n_servers: usize, rho: f64)
 {
@@ -117,13 +117,28 @@ fn sr_autoscaling_sim(n_servers: usize)
 
 }
 
+fn sr_autoscaling_sim_with_trace(n_servers: usize)
+{
+    let mu = 1./0.100; //100 ms
+    let tau_network = 0.000_000; //200 μs
+
+    let mut qn = AutoscalingQNet::new(Box::new(TraceGenerator::new("trace.csv", ' ')),
+                                      Box::new(FileLogger::new(1024, "results/results_sr_autoscale_trace.csv")),
+                                      n_servers,
+                                      ConstantDistribution::new(tau_network),
+                                      ConstantDistribution::new(1./mu),
+                                      Some(AutoscalingParameters{proba_empty: 0.8, ewma_window_len: 100.}));
+
+
+    // Run simulation
+    while let Ok(_) = qn.make_transition() {}
+
+    println!("Done");
+
+}
+
 
 
 pub fn run_autoscaling (_: env::Args) {
-    let mut rho = 4.;
-    while rho <= 40. {
-        centralized_noautoscaling_sim(40, rho);
-        rho += 5.;
-    }
-
+    sr_autoscaling_sim_with_trace(40);
 }

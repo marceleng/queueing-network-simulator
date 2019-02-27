@@ -82,12 +82,12 @@ struct AutoscalingFileLogger {
     nb_servers: usize,
     upscale_threshold: f64,
     downscale_threshold: f64,
-    num_events: usize,
-    num_events_to_converge: usize,
     log: FileLogger,
     ewma: TimeWindowedEwma,
     exit: Option<Request>,
     time: f64,
+    time_last_autoscale_event: f64,
+    time_before_accepting_new_autoscale_event: f64
 }
 
 impl AutoscalingFileLogger {
@@ -103,8 +103,8 @@ impl AutoscalingFileLogger {
             ewma: TimeWindowedEwma::new(ewma_window_len),
             exit: None,
             time: 0.,
-            num_events: 0,
-            num_events_to_converge: 100
+            time_last_autoscale_event: 0.,
+            time_before_accepting_new_autoscale_event: ewma_window_len
         }
     }
 
@@ -119,8 +119,8 @@ impl AutoscalingFileLogger {
             ewma: TimeWindowedEwma::new(ewma_window_len),
             exit: None,
             time: 0.,
-            num_events: 0,
-            num_events_to_converge: 100
+            time_last_autoscale_event: 0.,
+            time_before_accepting_new_autoscale_event: ewma_window_len
         }
     }
 
@@ -133,20 +133,22 @@ impl Queue for AutoscalingFileLogger
     {
         let service_time = self.ewma.update(self.time, r.get_current_lifetime());
 
-        if service_time > self.upscale_threshold &&
-            self.num_events >= self.num_events_to_converge  && self.nb_servers < std::usize::MAX {
-            self.num_events = 0;
+        if service_time > self.upscale_threshold
+                && self.time >= self.time_last_autoscale_event + self.time_before_accepting_new_autoscale_event
+                && self.nb_servers < std::usize::MAX {
+            self.time_last_autoscale_event = self.time;
             self.nb_servers += 1;
+            println!("t {} upscale_to {}", self.time, self.nb_servers);
             self.exit = Some(Request::new(self.nb_servers))
         }
-        else if service_time < self.downscale_threshold &&
-            self.num_events >= self.num_events_to_converge && self.nb_servers > 0 {
-            self.num_events = 0;
+        else if service_time < self.downscale_threshold
+                && self.time >= self.time_last_autoscale_event + self.time_before_accepting_new_autoscale_event
+                && self.nb_servers > 0 {
+            self.time_last_autoscale_event = self.time;
             self.nb_servers -= 1;
+            println!("t {} downscale_to {}", self.time, self.nb_servers);
             self.exit = Some(Request::new(self.nb_servers))
         }
-
-        self.num_events += 1;
 
         self.log.arrival(r);
     }

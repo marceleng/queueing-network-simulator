@@ -15,12 +15,19 @@ use helpers::distribution::MutDistribution;
 
 use helpers::float_binaryheap::FloatBinaryHeap;
 use helpers::ewma::TimeWindowedEwma;
+
 use rand::Rng;
 
 pub enum CentralizedLBPolicy {
     RND,
     JSQ2,
     JIQ
+}
+
+pub enum CentralizedScalingPolicy {
+    Schedule(&'static str, char),
+    Autoscaling(f64,f64,f64),
+    NoAutoscaling,
 }
 
 struct ScalingSchedule(FloatBinaryHeap<usize>, Option<(f64,Request)>);
@@ -72,12 +79,92 @@ impl Queue for ScalingSchedule {
 }
 
 struct AutoscalingFileLogger {
+    nb_servers: usize,
     upscale_threshold: f64,
     downscale_threshold: f64,
     log: FileLogger,
     ewma: TimeWindowedEwma,
+    exit: Option<Request>,
+    time: f64,
 }
 
+impl AutoscalingFileLogger {
+    pub fn new (buffer_size: usize, filename: &str, initial_number_of_servers: usize,
+                ewma_window_len: f64, upscale_threshold: f64, downscale_threshold: f64)
+                -> Self
+    {
+        AutoscalingFileLogger {
+            nb_servers: initial_number_of_servers,
+            upscale_threshold,
+            downscale_threshold,
+            log: FileLogger::new(buffer_size, filename),
+            ewma: TimeWindowedEwma::new(ewma_window_len),
+            exit: None,
+            time: 0.
+        }
+    }
+
+    pub fn from_file_logger (log: FileLogger, initial_number_of_servers: usize, ewma_window_len: f64,
+                             upscale_threshold: f64, downscale_threshold: f64) -> Self
+    {
+        AutoscalingFileLogger {
+            nb_servers: initial_number_of_servers,
+            upscale_threshold,
+            downscale_threshold,
+            log,
+            ewma: TimeWindowedEwma::new(ewma_window_len),
+            exit: None,
+            time: 0.
+        }
+    }
+
+}
+
+impl Queue for AutoscalingFileLogger
+{
+
+    fn arrival (&mut self, r: Request)
+    { 
+        let service_time = self.ewma.update(self.time, r.get_current_lifetime());
+
+        if service_time > self.upscale_threshold {
+            self.nb_servers += 1;
+            self.exit = Some(Request::new(self.nb_servers))
+        }
+        else if service_time < self.downscale_threshold {
+            self.nb_servers -= 1;
+            self.exit = Some(Request::new(self.nb_servers))
+        }
+
+        self.log.arrival(r);
+    }
+
+    fn update_time (&mut self, time: f64)
+    {
+        self.log.update_time(time);
+        self.time = time;
+    }
+
+    fn read_next_exit (&self) -> Option<(f64,&Request)>
+    {
+        let t = self.time;
+        self.exit.as_ref().map(|x| { (t, x) })
+    }
+
+    fn pop_next_exit (&mut self) -> Option<(f64,Request)>
+    {
+        let ret = self.exit.take();
+        ret.map(|x| { (self.time, x) })
+    }
+
+    fn read_load (&self) -> usize
+    {
+        match self.exit {
+            Some(_) => 1,
+            None => 0
+        }
+    }
+}
 
 pub struct CentralizedLoadBalancingQNet<T1: 'static+ MutDistribution<f64>+Clone,T2: 'static+ MutDistribution<f64>+Clone> {
     qn: QNet,
@@ -94,34 +181,53 @@ pub struct CentralizedLoadBalancingQNet<T1: 'static+ MutDistribution<f64>+Clone,
 
 impl<T1,T2> CentralizedLoadBalancingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDistribution<f64>+Clone {
     pub fn new (traffic_source: Box<Queue>,
-                file_logger: Box<Queue>,
-                _n_servers: usize,
-                _link_distribution: T1,
-                _server_distribution: T2,
-                _lb_policy: CentralizedLBPolicy,
-                _autoscaling_policy: Option<(&'static str, char)>) -> Self {
+                file_logger: Box<FileLogger>,
+                n_servers: usize,
+                link_distribution: T1,
+                server_distribution: T2,
+                lb_policy: CentralizedLBPolicy,
+                autoscaling_policy: CentralizedScalingPolicy) -> Self {
         let n = 0;
-        let mut _qn = QNet::new();
-        let _ptraffic_source = _qn.add_queue(traffic_source);
-        let _pfile_logger = _qn.add_queue(file_logger);
+        let mut qn = QNet::new();
+        let ptraffic_source = qn.add_queue(traffic_source);
+
+        let pfile_logger = match autoscaling_policy {
+            CentralizedScalingPolicy::Autoscaling(up, down, wlen) =>
+                qn.add_queue(
+                    Box::new(
+                        AutoscalingFileLogger::from_file_logger(*file_logger, n_servers,
+                                                                up, down, wlen))),
+            _ => qn.add_queue(file_logger)
+        };
+
+        let scaling_queue = match autoscaling_policy {
+            CentralizedScalingPolicy::Autoscaling(_,_,_) => pfile_logger,
+            CentralizedScalingPolicy::Schedule(filename, delimiter) =>
+                qn.add_queue(Box::new(ScalingSchedule::from_csv(filename, delimiter))),
+            _ => std::usize::MAX
+        };
+
+        if scaling_queue != std::usize::MAX {
+            //std::usize::MAX makes sure that we raise an Error in make_transition()
+            qn.add_transition(scaling_queue, Box::new(|_,_| std::usize::MAX));
+        }
+
         let mut ret = CentralizedLoadBalancingQNet {
-            qn : _qn,
+            qn,
             n_servers: 0,
-            ptraffic_source: _ptraffic_source,
-            pfile_logger: _pfile_logger,
+            ptraffic_source,
+            pfile_logger,
             pservers: vec![0 as usize; n],
             pnetwork_arcs: vec![0 as usize; n],
-            lb_policy: _lb_policy,
-            scaling_queue: std::usize::MAX,
-            link_distribution: _link_distribution.clone(),
-            server_distribution: _server_distribution.clone()
+            lb_policy,
+            scaling_queue,
+            link_distribution: link_distribution.clone(),
+            server_distribution: server_distribution.clone()
         };
-        for _i in 0.._n_servers {
+        for _ in 0..n_servers {
             ret.add_server();
         }
-        if let Some((filename, delimiter)) = _autoscaling_policy {
-            ret.setup_autoscale(filename, delimiter);
-        }
+
         ret
     }
 
@@ -151,14 +257,6 @@ impl<T1,T2> CentralizedLoadBalancingQNet<T1,T2> where T1:MutDistribution<f64>+Cl
             ret
         }
             
-    }
-
-    fn setup_autoscale(&mut self, filename: &'static str, delimiter: char)
-    {
-        //TODO: pass the file as an argument or in struct members
-        self.scaling_queue = self.qn.add_queue(Box::new(ScalingSchedule::from_csv(filename, delimiter)));
-        //std::usize::MAX makes sure that we raise an Error in make_transition()
-        self.qn.add_transition(self.scaling_queue, Box::new(|_,_| std::usize::MAX));
     }
 
     fn update_network(&mut self)
@@ -255,9 +353,9 @@ impl<T1,T2> CentralizedLoadBalancingQNet<T1,T2> where T1:MutDistribution<f64>+Cl
         } else {
             /* Reuse slot in vector if already existing */
             // Link src -> server n
-            self.pnetwork_arcs[self.n_servers - 1] = self.qn.change_queue(self.pnetwork_arcs[self.n_servers - 1], Box::new(MGINF::new(1., self.link_distribution.clone())));
+            self.qn.change_queue(self.pnetwork_arcs[self.n_servers - 1], Box::new(MGINF::new(1., self.link_distribution.clone())));
             // Server n
-            self.pservers[self.n_servers - 1] = self.qn.change_queue(self.pservers[self.n_servers - 1], Box::new(MG1PS::new(1., self.server_distribution.clone())));
+            self.qn.change_queue(self.pservers[self.n_servers - 1], Box::new(MG1PS::new(1., self.server_distribution.clone())));
         }
 
         self.update_network();

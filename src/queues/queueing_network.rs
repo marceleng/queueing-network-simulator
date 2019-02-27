@@ -63,10 +63,10 @@ impl QNet {
         & (*self.queues[queue])
     }    
 
-    pub fn change_queue(&mut self, queue: usize, q: Box<Queue>) -> usize
+    pub fn change_queue(&mut self, queue: usize, mut q: Box<Queue>) -> Box<Queue>
     {
-        self.queues[queue] = q;
-        queue
+        std::mem::swap(&mut self.queues[queue], &mut q);
+        q
     } 
 
     pub fn make_transition (&mut self) -> Result<Transition,TransitionError>

@@ -18,6 +18,7 @@ use queues::autoscaling_qnetwork::AutoscalingQNet;
 use queues::autoscaling_qnetwork::AutoscalingParameters;
 use queues::centralized_autoscaling_qnetwork::CentralizedLoadBalancingQNet;
 use queues::centralized_autoscaling_qnetwork::CentralizedLBPolicy;
+use queues::centralized_autoscaling_qnetwork::CentralizedScalingPolicy;
 use queues::file_logger::FileLogger;
 use queues::trace_generator::TraceGenerator;
 
@@ -33,7 +34,7 @@ fn centralized_noautoscaling_sim(n_servers: usize, rho: f64)
                                       ConstantDistribution::new(tau_network),
                                       Exp::new(mu),
                                       CentralizedLBPolicy::RND,
-                                      None);
+                                      CentralizedScalingPolicy::NoAutoscaling);
 
 
     // Run simulation
@@ -58,7 +59,7 @@ fn centralized_autoscaling_sim(n_servers: usize)
                                       ConstantDistribution::new(tau_network),
                                       Exp::new(mu),
                                       CentralizedLBPolicy::RND,
-                                      Some(("schedule.csv", ' ')) );
+                                      CentralizedScalingPolicy::Schedule("schedule.csv", ' ') );
 
 
     // Run simulation

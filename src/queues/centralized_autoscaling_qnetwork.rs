@@ -92,7 +92,7 @@ struct AutoscalingFileLogger {
 
 impl AutoscalingFileLogger {
     pub fn new (buffer_size: usize, filename: &str, initial_number_of_servers: usize,
-                ewma_window_len: f64, upscale_threshold: f64, downscale_threshold: f64)
+                upscale_threshold: f64, downscale_threshold: f64, ewma_window_len: f64)
                 -> Self
     {
         AutoscalingFileLogger {
@@ -108,8 +108,8 @@ impl AutoscalingFileLogger {
         }
     }
 
-    pub fn from_file_logger (log: FileLogger, initial_number_of_servers: usize, ewma_window_len: f64,
-                             upscale_threshold: f64, downscale_threshold: f64) -> Self
+    pub fn from_file_logger (log: FileLogger, initial_number_of_servers: usize,
+                             upscale_threshold: f64, downscale_threshold: f64, ewma_window_len: f64) -> Self
     {
         AutoscalingFileLogger {
             nb_servers: initial_number_of_servers,

@@ -29,6 +29,7 @@ impl TimeWindowedEwma {
         let alpha = if self.last_event_time < 0. { 0.01 } // We trust the initial value a lot
                     else { 1. - (-(time - self.last_event_time) / self.window_len).exp() };
         self.current_estimation = (1.- alpha) * self.current_estimation + alpha * value;
+        self.last_event_time = time;
         self.current_estimation
     }
 

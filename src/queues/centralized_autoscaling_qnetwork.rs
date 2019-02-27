@@ -82,6 +82,8 @@ struct AutoscalingFileLogger {
     nb_servers: usize,
     upscale_threshold: f64,
     downscale_threshold: f64,
+    num_events: usize,
+    num_events_to_converge: usize,
     log: FileLogger,
     ewma: TimeWindowedEwma,
     exit: Option<Request>,
@@ -100,7 +102,9 @@ impl AutoscalingFileLogger {
             log: FileLogger::new(buffer_size, filename),
             ewma: TimeWindowedEwma::new(ewma_window_len),
             exit: None,
-            time: 0.
+            time: 0.,
+            num_events: 0,
+            num_events_to_converge: 100
         }
     }
 
@@ -114,7 +118,9 @@ impl AutoscalingFileLogger {
             log,
             ewma: TimeWindowedEwma::new(ewma_window_len),
             exit: None,
-            time: 0.
+            time: 0.,
+            num_events: 0,
+            num_events_to_converge: 100
         }
     }
 
@@ -127,14 +133,18 @@ impl Queue for AutoscalingFileLogger
     { 
         let service_time = self.ewma.update(self.time, r.get_current_lifetime());
 
-        if service_time > self.upscale_threshold {
+        if service_time > self.upscale_threshold && self.num_events >= self.num_events_to_converge {
+            self.num_events = 0;
             self.nb_servers += 1;
             self.exit = Some(Request::new(self.nb_servers))
         }
-        else if service_time < self.downscale_threshold {
+        else if service_time < self.downscale_threshold && self.num_events >= self.num_events_to_converge {
+            self.num_events = 0;           
             self.nb_servers -= 1;
             self.exit = Some(Request::new(self.nb_servers))
         }
+
+        self.num_events += 1;
 
         self.log.arrival(r);
     }

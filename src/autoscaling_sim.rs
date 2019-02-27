@@ -22,7 +22,7 @@ use queues::centralized_autoscaling_qnetwork::CentralizedScalingPolicy;
 use queues::file_logger::FileLogger;
 use queues::trace_generator::TraceGenerator;
 
-fn centralized_noautoscaling_sim(n_servers: usize, rho: f64)
+fn centralized_lb_noautoscaling_sim(n_servers: usize, rho: f64)
 {
     let mu = 1./0.100; //100 ms
     let lambda = rho * mu;
@@ -46,7 +46,7 @@ fn centralized_noautoscaling_sim(n_servers: usize, rho: f64)
 
 }
 
-fn centralized_autoscaling_sim(n_servers: usize)
+fn centralized_lb_with_schedule_sim(n_servers: usize)
 {
     let mu = 1./0.100; //100 ms
     let tau_network = 0.000_000; //200 μs
@@ -70,6 +70,34 @@ fn centralized_autoscaling_sim(n_servers: usize)
     println!("Done");
 
 }
+
+
+
+fn centralized_lb_with_autoscaling_sim(n_servers: usize)
+{
+    let mu = 1./0.100; //100 ms
+    let tau_network = 0.000_000; //200 μs
+
+    let mut qn = CentralizedLoadBalancingQNet::new(Box::new(ContinuouslyModulatedPoissonGenerator::new(
+                                                                Box::new(move |t| mu*(50. - 20.*(2.*PI*t/86400.).cos())),
+                                                          ConstantDistribution::new(1))),
+                                      Box::new(FileLogger::new(1024, "results/results_centralized_autoscale.csv")),
+                                      n_servers,
+                                      ConstantDistribution::new(tau_network),
+                                      Exp::new(mu),
+                                      CentralizedLBPolicy::RND,
+                                      CentralizedScalingPolicy::Autoscaling(0.110, 0.104, 60.) );
+
+
+    // Run simulation
+    let mut t = 0.;
+    while t < 86400. {
+        t = qn.make_transition().unwrap().time;
+    }
+    println!("Done");
+
+}
+
 
 fn sr_noautoscaling_sim(n_servers: usize, rho: f64)
 {

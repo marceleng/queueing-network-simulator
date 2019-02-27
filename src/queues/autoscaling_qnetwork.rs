@@ -18,6 +18,7 @@ pub struct AutoscalingParameters {
 struct AutoscalingTracker {
     ewma: TimeWindowedEwma,
     num_events: usize,
+    num_events_to_converge: usize,
     upscale_threshold: f64,
     downscale_threshold: f64,
     did_request_scaling: bool
@@ -28,6 +29,7 @@ impl AutoscalingTracker {
         AutoscalingTracker {
             ewma: TimeWindowedEwma::from_initial_value(pe_start, ewma_window_len),
             num_events: 0,
+            num_events_to_converge: 100,
             upscale_threshold,
             downscale_threshold,
             did_request_scaling: false,
@@ -63,10 +65,10 @@ impl AutoscalingTracker {
         let proba_empty_ewma = self.ewma.update(time, if load == 0 { 1. } else { 0. });
         //println!("time={}, last_time={}, load={}, ewma={}", time, self.last_event_time, load, self.proba_empty_ewma);
         self.num_events += 1;
-        if proba_empty_ewma > self.downscale_threshold && self.num_events >= 100 && !self.did_request_scaling {
+        if proba_empty_ewma > self.downscale_threshold && self.num_events >= self.num_events_to_converge && !self.did_request_scaling {
             self.did_request_scaling = true;
             ScalingOperation::DOWNSCALING
-        } else if proba_empty_ewma < self.upscale_threshold && self.num_events >= 100 && !self.did_request_scaling {
+        } else if proba_empty_ewma < self.upscale_threshold && self.num_events >= self.num_events_to_converge && !self.did_request_scaling {
             self.did_request_scaling = true;
             ScalingOperation::UPSCALING
         } else {

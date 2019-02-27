@@ -1,8 +1,8 @@
 use queues::request::Request;
 use queues::Queue;
-use float_binaryheap::FloatBinaryHeap;
+use helpers::float_binaryheap::FloatBinaryHeap;
 
-use distribution::MutDistribution;
+use helpers::distribution::MutDistribution;
 
 pub struct MGINF<T> where T: MutDistribution<f64> {
     time: f64,

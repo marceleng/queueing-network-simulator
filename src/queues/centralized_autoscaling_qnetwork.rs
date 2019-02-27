@@ -7,12 +7,14 @@ use queues::queueing_network::{QNet,Transition,TransitionError};
 use queues::Queue;
 use queues::mg1ps::MG1PS;
 use queues::mginf::MGINF;
+use queues::file_logger::FileLogger;
 
 use queues::request::Request;
 
-use distribution::MutDistribution;
+use helpers::distribution::MutDistribution;
 
-use float_binaryheap::FloatBinaryHeap;
+use helpers::float_binaryheap::FloatBinaryHeap;
+use helpers::ewma::TimeWindowedEwma;
 use rand::Rng;
 
 pub enum CentralizedLBPolicy {
@@ -49,9 +51,9 @@ impl ScalingSchedule {
 }
 
 impl Queue for ScalingSchedule {
-    fn arrival        (&mut self, _: Request) { panic!("You should not arrive in this queue"); }
+    fn arrival (&mut self, _: Request) { panic!("You should not arrive in this queue"); }
 
-    fn update_time    (&mut self, _time: f64) {}
+    fn update_time (&mut self, _time: f64) {}
 
     fn read_next_exit (&self) -> Option<(f64,&Request)> {
         match self.1 {
@@ -60,16 +62,24 @@ impl Queue for ScalingSchedule {
         }
     }
 
-    fn pop_next_exit  (&mut self) -> Option<(f64,Request)> {
+    fn pop_next_exit (&mut self) -> Option<(f64,Request)> {
         let ret = self.1.take();
         self.1 = self.0.pop().map( |(t,n)| (t, Request::new(n)));
         ret
     }
 
-    fn read_load	  (&self) -> usize { 1 }
+    fn read_load (&self) -> usize { 1 }
 }
 
-pub struct CentralizedAutoscalingQNet<T1: 'static+ MutDistribution<f64>+Clone,T2: 'static+ MutDistribution<f64>+Clone> {
+struct AutoscalingFileLogger {
+    upscale_threshold: f64,
+    downscale_threshold: f64,
+    log: FileLogger,
+    ewma: TimeWindowedEwma,
+}
+
+
+pub struct CentralizedLoadBalancingQNet<T1: 'static+ MutDistribution<f64>+Clone,T2: 'static+ MutDistribution<f64>+Clone> {
     qn: QNet,
     n_servers: usize,
     ptraffic_source: usize,
@@ -82,7 +92,7 @@ pub struct CentralizedAutoscalingQNet<T1: 'static+ MutDistribution<f64>+Clone,T2
     server_distribution: T2
 }
 
-impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDistribution<f64>+Clone {
+impl<T1,T2> CentralizedLoadBalancingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDistribution<f64>+Clone {
     pub fn new (traffic_source: Box<Queue>,
                 file_logger: Box<Queue>,
                 _n_servers: usize,
@@ -94,7 +104,7 @@ impl<T1,T2> CentralizedAutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clon
         let mut _qn = QNet::new();
         let _ptraffic_source = _qn.add_queue(traffic_source);
         let _pfile_logger = _qn.add_queue(file_logger);
-        let mut ret = CentralizedAutoscalingQNet {
+        let mut ret = CentralizedLoadBalancingQNet {
             qn : _qn,
             n_servers: 0,
             ptraffic_source: _ptraffic_source,

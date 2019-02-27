@@ -2,7 +2,7 @@ use std::io::BufReader;
 use std::io::BufRead;
 use std::fs::File;
 
-use float_binaryheap::FloatBinaryHeap;
+use helpers::float_binaryheap::FloatBinaryHeap;
 use queues::request::Request;
 use queues::Queue;
 

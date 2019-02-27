@@ -12,11 +12,11 @@ use queues::cm_poisson_generator::ContinuouslyModulatedPoissonGenerator;
 
 
 use rand::distributions::{Exp};
-use distribution::{ConstantDistribution};
+use helpers::distribution::{ConstantDistribution};
 
 use queues::autoscaling_qnetwork::AutoscalingQNet;
 use queues::autoscaling_qnetwork::AutoscalingParameters;
-use queues::centralized_autoscaling_qnetwork::CentralizedAutoscalingQNet;
+use queues::centralized_autoscaling_qnetwork::CentralizedLoadBalancingQNet;
 use queues::centralized_autoscaling_qnetwork::CentralizedLBPolicy;
 use queues::file_logger::FileLogger;
 use queues::trace_generator::TraceGenerator;
@@ -27,7 +27,7 @@ fn centralized_noautoscaling_sim(n_servers: usize, rho: f64)
     let lambda = rho * mu;
     let tau_network = 0.000_000; //200 μs
 
-    let mut qn = CentralizedAutoscalingQNet::new(Box::new(PoissonGenerator::new(lambda, ConstantDistribution::new(1))),
+    let mut qn = CentralizedLoadBalancingQNet::new(Box::new(PoissonGenerator::new(lambda, ConstantDistribution::new(1))),
                                       Box::new(FileLogger::new(1024, &format!("results/results_rnd_{:.2}.csv", rho))),
                                       n_servers,
                                       ConstantDistribution::new(tau_network),
@@ -50,7 +50,7 @@ fn centralized_autoscaling_sim(n_servers: usize)
     let mu = 1./0.100; //100 ms
     let tau_network = 0.000_000; //200 μs
 
-    let mut qn = CentralizedAutoscalingQNet::new(Box::new(ContinuouslyModulatedPoissonGenerator::new(
+    let mut qn = CentralizedLoadBalancingQNet::new(Box::new(ContinuouslyModulatedPoissonGenerator::new(
                                                                 Box::new(move |t| mu*(50. - 20.*(2.*PI*t/86400.).cos())),
                                                           ConstantDistribution::new(1))),
                                       Box::new(FileLogger::new(1024, "results/results_centralized_autoscale.csv")),

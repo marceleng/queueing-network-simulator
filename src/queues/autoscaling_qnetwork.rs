@@ -3,10 +3,8 @@ use queues::Queue;
 use std::vec::Vec;
 use queues::mg1ps::MG1PS;
 use queues::mginf::MGINF;
-use distribution::MutDistribution;
-
-use rand::Rng;
-
+use helpers::distribution::MutDistribution;
+use helpers::ewma::TimeWindowedEwma;
 
 enum ScalingOperation {
     NOOP,
@@ -18,24 +16,20 @@ pub struct AutoscalingParameters {
     pub ewma_window_len: f64
 }
 struct AutoscalingTracker {
-    last_event_time: f64,
+    ewma: TimeWindowedEwma,
     num_events: usize,
-    proba_empty_ewma: f64,
-    ewma_window_len: f64,
     upscale_threshold: f64,
     downscale_threshold: f64,
     did_request_scaling: bool
 }
 
 impl AutoscalingTracker {
-    fn new(_downscale_threshold: f64, pe_start: f64, _upscale_threshold: f64, _ewma_window_len: f64) -> Self {
+    fn new(downscale_threshold: f64, pe_start: f64, upscale_threshold: f64, ewma_window_len: f64) -> Self {
         AutoscalingTracker {
-            last_event_time: -1.,
+            ewma: TimeWindowedEwma::from_initial_value(pe_start, ewma_window_len),
             num_events: 0,
-            proba_empty_ewma: pe_start,
-            ewma_window_len: _ewma_window_len,
-            upscale_threshold: _upscale_threshold,
-            downscale_threshold: _downscale_threshold,
+            upscale_threshold,
+            downscale_threshold,
             did_request_scaling: false,
         }
     }
@@ -66,16 +60,13 @@ impl AutoscalingTracker {
 
     fn update(&mut self, time: f64, load: usize) -> ScalingOperation
     {
-        let alpha = if self.last_event_time > 0. { 1. - (-(time - self.last_event_time) / self.ewma_window_len).exp() } else { 0.01 };
-        let incr = if load == 0 { 1. } else { 0. };
-        self.proba_empty_ewma = (1. - alpha) * self.proba_empty_ewma + alpha * incr;
+        let proba_empty_ewma = self.ewma.update(time, if load == 0 { 1. } else { 0. });
         //println!("time={}, last_time={}, load={}, ewma={}", time, self.last_event_time, load, self.proba_empty_ewma);
-        self.last_event_time = time;
         self.num_events += 1;
-        if self.proba_empty_ewma > self.downscale_threshold && self.num_events >= 100 && !self.did_request_scaling {
+        if proba_empty_ewma > self.downscale_threshold && self.num_events >= 100 && !self.did_request_scaling {
             self.did_request_scaling = true;
             ScalingOperation::DOWNSCALING
-        } else if self.proba_empty_ewma < self.upscale_threshold && self.num_events >= 100 && !self.did_request_scaling {
+        } else if proba_empty_ewma < self.upscale_threshold && self.num_events >= 100 && !self.did_request_scaling {
             self.did_request_scaling = true;
             ScalingOperation::UPSCALING
         } else {
@@ -194,6 +185,7 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
             {
                 let source = self.pnetwork_arcs[last_server_idx];
                 let potential_dest = self.pservers[last_server_idx];
+                /*
                 let JIQ = false;
                 if JIQ {
                     let fallback_dests = self.pservers.clone();
@@ -203,7 +195,8 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
                     }));
                 } else {
                     self.qn.add_transition(source, Box::new(move |_,_| potential_dest ));
-                }
+                } */
+                self.qn.add_transition(source, Box::new(move |_,_| potential_dest ));
             }
 
             // Transition server n -> file_logger

@@ -1,6 +1,6 @@
 extern crate rand;
 
-use distribution::MutDistribution;
+use helpers::distribution::MutDistribution;
 use queues::Queue;
 use queues::request::Request;
 use std::mem;

@@ -2,9 +2,9 @@ use std::collections::{HashMap,VecDeque};
 
 use queues::request::Request;
 use queues::Queue;
-use float_binaryheap::FloatBinaryHeap;
+use helpers::float_binaryheap::FloatBinaryHeap;
 
-use distribution::MutDistribution;
+use helpers::distribution::MutDistribution;
 
 //#[derive(Clone)]
 pub struct MG1PS<T,Process> where T: MutDistribution<f64>, Process: PartialEq {

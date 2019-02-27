@@ -1,7 +1,7 @@
 extern crate rand;
 
 use self::rand::distributions::Distribution;
-use distribution::exponential_generator;
+use helpers::distribution::exponential_generator;
 use queues::request::Request;
 use queues::Queue;
 

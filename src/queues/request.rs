@@ -35,6 +35,16 @@ impl Request {
     {
         self.0.log.clone()
     }
+
+    pub fn get_current_lifetime(&self) -> f64
+    {
+        if self.0.log.len() <= 1 {
+            0.
+        }
+        else {
+            self.0.log.last().unwrap().0 - self.0.log.first().unwrap().0
+        }
+    }
 }
 
 impl _Request {

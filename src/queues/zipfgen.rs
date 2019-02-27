@@ -1,7 +1,7 @@
 extern crate rand;
 extern crate zipf;
 
-use distribution::MutDistribution;
+use helpers::distribution::MutDistribution;
 use zipf::ZipfDistribution;
 
 use std::vec::Vec;
@@ -9,7 +9,7 @@ use std::mem;
 
 use queues::Queue;
 use queues::request::Request;
-use float_binaryheap::FloatBinaryHeap;
+use helpers::float_binaryheap::FloatBinaryHeap;
 
 pub struct ZipfGenerator<T> where T: MutDistribution<f64> {
     pop_distribution: ZipfDistribution,

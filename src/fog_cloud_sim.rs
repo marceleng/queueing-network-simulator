@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::env;
 
 use rand::distributions::{Exp};
-use distribution::ConstantDistribution;
+use helpers::distribution::ConstantDistribution;
 
 use queues::mg1ps::{AggregatingMG1PS,MG1PS};
 use queues::mginf::MGINF;

@@ -1,5 +1,5 @@
-use float_binaryheap::FloatBinaryHeap;
-use distribution::MutDistribution;
+use helpers::float_binaryheap::FloatBinaryHeap;
+use helpers::distribution::MutDistribution;
 use std::collections::VecDeque;
 use queues::request::Request;
 

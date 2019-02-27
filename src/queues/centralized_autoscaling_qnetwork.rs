@@ -130,16 +130,18 @@ impl Queue for AutoscalingFileLogger
 {
 
     fn arrival (&mut self, r: Request)
-    { 
+    {
         let service_time = self.ewma.update(self.time, r.get_current_lifetime());
 
-        if service_time > self.upscale_threshold && self.num_events >= self.num_events_to_converge {
+        if service_time > self.upscale_threshold &&
+            self.num_events >= self.num_events_to_converge  && self.nb_servers < std::usize::MAX {
             self.num_events = 0;
             self.nb_servers += 1;
             self.exit = Some(Request::new(self.nb_servers))
         }
-        else if service_time < self.downscale_threshold && self.num_events >= self.num_events_to_converge {
-            self.num_events = 0;           
+        else if service_time < self.downscale_threshold &&
+            self.num_events >= self.num_events_to_converge && self.nb_servers > 0 {
+            self.num_events = 0;
             self.nb_servers -= 1;
             self.exit = Some(Request::new(self.nb_servers))
         }
@@ -266,7 +268,7 @@ impl<T1,T2> CentralizedLoadBalancingQNet<T1,T2> where T1:MutDistribution<f64>+Cl
         else {
             ret
         }
-            
+
     }
 
     fn update_network(&mut self)

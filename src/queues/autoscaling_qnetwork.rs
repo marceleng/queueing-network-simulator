@@ -35,7 +35,7 @@ impl AutoscalingTracker {
             upscale_threshold,
             downscale_threshold,
             time_last_tracking_event: -1.,
-            keepalive_time: 10.,
+            keepalive_time: 1.,
             did_request_scaling: false,
         }
     }
@@ -84,7 +84,7 @@ impl AutoscalingTracker {
 
     fn needs_keepalive(&self, time: f64) -> bool 
     {
-        return (self.time_last_tracking_event != -1.) && (time > self.time_last_tracking_event + self.keepalive_time);
+        return time > self.time_last_tracking_event + self.keepalive_time;
     }
 }
 

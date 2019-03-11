@@ -21,6 +21,8 @@ struct AutoscalingTracker {
     num_events_to_converge: usize,
     upscale_threshold: f64,
     downscale_threshold: f64,
+    time_last_tracking_event: f64,
+    keepalive_time: f64,
     did_request_scaling: bool
 }
 
@@ -32,6 +34,8 @@ impl AutoscalingTracker {
             num_events_to_converge: 100,
             upscale_threshold,
             downscale_threshold,
+            time_last_tracking_event: -1.,
+            keepalive_time: 10.,
             did_request_scaling: false,
         }
     }
@@ -65,6 +69,8 @@ impl AutoscalingTracker {
         let proba_empty_ewma = self.ewma.update(time, if load == 0 { 1. } else { 0. });
         //println!("time={}, last_time={}, load={}, ewma={}", time, self.last_event_time, load, self.proba_empty_ewma);
         self.num_events += 1;
+        self.time_last_tracking_event = time;
+
         if proba_empty_ewma > self.downscale_threshold && self.num_events >= self.num_events_to_converge && !self.did_request_scaling {
             self.did_request_scaling = true;
             ScalingOperation::DOWNSCALING
@@ -74,6 +80,11 @@ impl AutoscalingTracker {
         } else {
             ScalingOperation::NOOP
         }
+    }
+
+    fn needs_keepalive(&self, time: f64) -> bool 
+    {
+        return (self.time_last_tracking_event != -1.) && (time > self.time_last_tracking_event + self.keepalive_time);
     }
 }
 
@@ -129,7 +140,8 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
 
         let mut scaling_op = ScalingOperation::NOOP;
         let leave_event = self.autoscaling_tracker.is_some() && (trans.origin == self.pserver_with_tracker);
-        let arrival_event = trans.destination == self.pserver_with_tracker && self.autoscaling_tracker.is_some();
+        let arrival_event = self.autoscaling_tracker.is_some() && (trans.destination == self.pserver_with_tracker);
+        let keepalive_event = self.autoscaling_tracker.is_some() && self.autoscaling_tracker.as_ref().unwrap().needs_keepalive(trans.time);
 
         let mut load_before_event = self.qn.queues[self.pserver_with_tracker].read_load();
         if leave_event {
@@ -138,7 +150,7 @@ impl<T1,T2> AutoscalingQNet<T1,T2> where T1:MutDistribution<f64>+Clone, T2:MutDi
             load_before_event -= 1;
         }
 
-        if leave_event || arrival_event {
+        if leave_event || arrival_event || keepalive_event {
             if let Some(ref mut tracker) = self.autoscaling_tracker {
                 scaling_op = tracker.update(trans.time, load_before_event);
             }

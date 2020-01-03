@@ -9,6 +9,7 @@ pub struct Request(Box<_Request>);
 #[derive(PartialEq,Clone,Debug)]
 struct _Request {
     id: usize,
+    server_idx_anno: usize,
     content: usize,
     log: Vec<(LogKey, LogEntry)>,
 }
@@ -45,12 +46,21 @@ impl Request {
             self.0.log.last().unwrap().0 - self.0.log.first().unwrap().0
         }
     }
+
+    pub fn get_server_idx_anno(&self) -> usize {
+        self.0.server_idx_anno
+    }
+
+    pub fn set_server_idx_anno(&mut self, anno: usize) {
+        self.0.server_idx_anno = anno;
+    }    
 }
 
 impl _Request {
     pub fn new (content: usize) -> Self {
         let mut ret = _Request {
             id: 0,
+            server_idx_anno: std::usize::MAX,
             content,
             log : Vec::new()
         };

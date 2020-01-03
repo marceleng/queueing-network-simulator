@@ -1,4 +1,6 @@
 //Implementation of https://en.wikipedia.org/wiki/Moving_average#Application_to_measuring_computer_performance
+
+#[derive(Clone)]
 pub struct TimeWindowedEwma {
     current_estimation: f64,
     window_len: f64,

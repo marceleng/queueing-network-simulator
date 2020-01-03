@@ -27,6 +27,7 @@ pub enum CentralizedLBPolicy {
 pub enum CentralizedScalingPolicy {
     Schedule(&'static str, char),
     Autoscaling(f64,f64,f64),
+    PerServerAutoscaling(f64,f64,f64),    
     NoAutoscaling,
 }
 
@@ -76,6 +77,123 @@ impl Queue for ScalingSchedule {
     }
 
     fn read_load (&self) -> usize { 1 }
+}
+
+struct PerServerAutoscalingFileLogger {
+    nb_servers: usize,
+    upscale_threshold: f64,
+    downscale_threshold: f64,
+    log: FileLogger,
+    ewmas: Vec<TimeWindowedEwma>,
+    ewma_window_len: f64,
+    exit: Option<Request>,
+    time: f64,
+    time_last_autoscale_event: f64,
+    time_before_accepting_new_autoscale_event: f64
+}
+
+impl PerServerAutoscalingFileLogger {
+    pub fn new (buffer_size: usize, filename: &str, initial_number_of_servers: usize,
+                upscale_threshold: f64, downscale_threshold: f64, ewma_window_len: f64)
+                -> Self
+    {
+        PerServerAutoscalingFileLogger {
+            nb_servers: initial_number_of_servers,
+            upscale_threshold,
+            downscale_threshold,
+            log: FileLogger::new(buffer_size, filename),
+            ewmas: vec!(TimeWindowedEwma::from_initial_value((upscale_threshold+downscale_threshold)/2., ewma_window_len); initial_number_of_servers),
+            ewma_window_len,
+            exit: None,
+            time: 0.,
+            time_last_autoscale_event: 0.,
+            time_before_accepting_new_autoscale_event: ewma_window_len
+        }
+    }
+
+    pub fn from_file_logger (log: FileLogger, initial_number_of_servers: usize,
+                             upscale_threshold: f64, downscale_threshold: f64, ewma_window_len: f64) -> Self
+    {
+        PerServerAutoscalingFileLogger {
+            nb_servers: initial_number_of_servers,
+            upscale_threshold,
+            downscale_threshold,
+            log,
+            ewmas: vec!(TimeWindowedEwma::from_initial_value((upscale_threshold+downscale_threshold)/2., ewma_window_len); initial_number_of_servers),
+            ewma_window_len,           
+            exit: None,
+            time: 0.,
+            time_last_autoscale_event: 0.,
+            time_before_accepting_new_autoscale_event: ewma_window_len
+        }
+    }
+
+}
+
+impl Queue for PerServerAutoscalingFileLogger
+{
+    fn arrival (&mut self, r: Request)
+    {
+        let mut service_time_ewma_avg : f64 = 0.;
+        for i in 0..(self.nb_servers) {
+            if i == r.get_server_idx_anno() {
+                self.ewmas[i].update(self.time, r.get_current_lifetime());
+            }
+            service_time_ewma_avg += self.ewmas[i].get_current_estimation();
+        }
+        service_time_ewma_avg /= self.nb_servers as f64;
+
+        if service_time_ewma_avg > self.upscale_threshold
+                && self.time >= self.time_last_autoscale_event + self.time_before_accepting_new_autoscale_event
+                && self.nb_servers < std::usize::MAX {
+            self.time_last_autoscale_event = self.time;
+            self.nb_servers += 1;
+            println!("t {} upscale_to {}", self.time, self.nb_servers);
+            self.exit = Some(Request::new(self.nb_servers));
+
+            // re-initialize ewma counter for newly added server
+            self.ewmas.resize(self.nb_servers, TimeWindowedEwma::from_initial_value((self.upscale_threshold+self.downscale_threshold)/2., self.ewma_window_len));
+        }
+        else if service_time_ewma_avg < self.downscale_threshold
+                && self.time >= self.time_last_autoscale_event + self.time_before_accepting_new_autoscale_event
+                && self.nb_servers > 0 {
+            self.time_last_autoscale_event = self.time;
+            self.nb_servers -= 1;
+            println!("t {} downscale_to {}", self.time, self.nb_servers);
+
+            // remove ewma counter for just-removed server
+            self.ewmas.resize(self.nb_servers, TimeWindowedEwma::from_initial_value((self.upscale_threshold+self.downscale_threshold)/2., self.ewma_window_len));
+            self.exit = Some(Request::new(self.nb_servers));
+        }
+
+        self.log.arrival(r);
+    }
+
+    fn update_time (&mut self, time: f64)
+    {
+        self.log.update_time(time);
+        self.time = time;
+    }
+
+    fn read_next_exit (&self) -> Option<(f64,&Request)>
+    {
+        let t = self.time;
+        self.exit.as_ref().map(|x| { (t, x) })
+    }
+
+    fn pop_next_exit (&mut self) -> Option<(f64,Request)>
+    {
+        let ret = self.exit.take();
+        ret.map(|x| { (self.time, x) })
+    }
+
+    fn read_load (&self) -> usize
+    {
+        match self.exit {
+            Some(_) => 1,
+            None => 0
+        }
+    }
 }
 
 struct AutoscalingFileLogger {
@@ -211,11 +329,17 @@ impl<T1,T2> CentralizedLoadBalancingQNet<T1,T2> where T1:MutDistribution<f64>+Cl
                     Box::new(
                         AutoscalingFileLogger::from_file_logger(*file_logger, n_servers,
                                                                 up, down, wlen))),
+            CentralizedScalingPolicy::PerServerAutoscaling(up, down, wlen) =>
+                qn.add_queue(
+                    Box::new(
+                        PerServerAutoscalingFileLogger::from_file_logger(*file_logger, n_servers,
+                                                                         up, down, wlen))),                
             _ => qn.add_queue(file_logger)
         };
 
         let scaling_queue = match autoscaling_policy {
             CentralizedScalingPolicy::Autoscaling(_,_,_) => pfile_logger,
+            CentralizedScalingPolicy::PerServerAutoscaling(_,_,_) => pfile_logger,            
             CentralizedScalingPolicy::Schedule(filename, delimiter) =>
                 qn.add_queue(Box::new(ScalingSchedule::from_csv(filename, delimiter))),
             _ => std::usize::MAX
@@ -288,11 +412,13 @@ impl<T1,T2> CentralizedLoadBalancingQNet<T1,T2> where T1:MutDistribution<f64>+Cl
                 //NB: the following removes stale transitions as well, since we use a new version of pnetwork_arcs
                 match self.lb_policy {
                     CentralizedLBPolicy::RND =>
-                        self.qn.add_transition(source, Box::new(move |ref _req, ref _qn| {
-                            dests[rand::thread_rng().gen_range(0, n_servers)]
+                        self.qn.add_transition(source, Box::new(move |ref mut _req, ref _qn| {
+                            let server_idx = rand::thread_rng().gen_range(0, n_servers);
+                            _req.set_server_idx_anno(server_idx);
+                            dests[server_idx]
                         })),
                     CentralizedLBPolicy::JSQ2 =>
-                        self.qn.add_transition(source, Box::new(move |ref _req, ref qn| {
+                        self.qn.add_transition(source, Box::new(move |ref mut _req, ref qn| {
                             let choice_1 = rand::thread_rng().gen_range(0, n_servers);
                             let mut choice_2 = choice_1;
                             while choice_2 == choice_1 && n_servers > 1 {
@@ -300,23 +426,26 @@ impl<T1,T2> CentralizedLoadBalancingQNet<T1,T2> where T1:MutDistribution<f64>+Cl
                             }
                             let load_1 = qn.get_queue(servers[choice_1]).read_load();
                             let load_2 = qn.get_queue(servers[choice_2]).read_load();
-                            if load_1 < load_2 {
-                                dests[choice_1]
-                            } else {
-                                dests[choice_2]
-                            }
-
+                            let server_idx = if load_1 < load_2 { choice_1 }  else { choice_2 };
+                            _req.set_server_idx_anno(server_idx);
+                            dests[server_idx]
                         })),
                     CentralizedLBPolicy::JIQ =>
-                        self.qn.add_transition(source, Box::new(move |ref _req, ref qn| {
+                        self.qn.add_transition(source, Box::new(move |ref mut _req, ref qn| {
+                            let mut server_idx = std::usize::MAX;
                             // Join an idle queue...
                             for i in 0..n_servers {
                                 if qn.get_queue(servers[i]).read_load() == 0 {
-                                    return dests[i]
+                                    server_idx = i;
+                                    break;
                                 }
                             }
                             // ... or go to a random one, if none is available
-                            dests[rand::thread_rng().gen_range(0, n_servers)]
+                            if server_idx == std::usize::MAX {
+                                server_idx = rand::thread_rng().gen_range(0, n_servers);
+                            }
+                            _req.set_server_idx_anno(server_idx);
+                            dests[server_idx]                            
                         }))
                 }
 

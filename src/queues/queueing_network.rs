@@ -3,7 +3,7 @@ use queues::request::Request;
 use std::vec::Vec;
 use std::f64::INFINITY;
 
-type TransitionFunc = Box<Fn(&Request, &QNet)->usize>;
+type TransitionFunc = Box<Fn(&mut Request, &QNet)->usize>;
 
 
 #[derive(Debug)]
@@ -91,7 +91,7 @@ impl QNet {
                 match self.transitions[orig_q] {
                     None => Err(TransitionError::NoTransitionFound(orig_q)),
                     Some(ref f) => { 
-                        let dest_q = f(&r, &self);
+                        let dest_q = f(&mut r, &self);
                         let ret = Transition {
                             time: t,
                             origin: orig_q,
